@@ -2,7 +2,7 @@
 bl_info = {
 	"name": "Bake Helper",
 	"author": "Kenetics",
-	"version": (0, 5),
+	"version": (0, 6),
 	"blender": (2, 80, 0),
 	"location": "Properties > Render Tab > Bake Helper Section",
 	"description": "Sets up object's materials for baking",

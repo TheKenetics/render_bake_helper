@@ -1,4 +1,4 @@
-# BakeHelper2.8
+# render_bake_helper
 Blender 2.8 addon helps users prepare their objects for baking.
 
 ## Why  

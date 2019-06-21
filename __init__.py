@@ -183,9 +183,9 @@ class BH_OT_connect_outputs(Operator):
 		return {'FINISHED'}
 
 
-class BN_OT_connect_outputs_dialog(Operator):
+class BH_OT_connect_outputs_dialog(Operator):
 	"""Connects bake nodes to material output"""
-	bl_idname = "bake.bn_ot_connect_outputs_dialog"
+	bl_idname = "bake.bh_ot_connect_outputs_dialog"
 	bl_label = "Connect BakeNode Outputs"
 	bl_options = {'REGISTER','UNDO'}
 	
@@ -348,24 +348,39 @@ class BH_addon_preferences(AddonPreferences):
 			row = col.row(align=True)
 			row.label(text="When ready to bake, select the BakeNode and run 'Connect BakeNode Outputs'",icon="THREE_DOTS")
 
+## Append to UI Helper Functions
+def add_connect_bakenode_outputs_button(self, context):
+	orig_context = self.layout.operator_context
+	
+	self.layout.operator_context = "INVOKE_DEFAULT"
+	self.layout.operator(BH_OT_connect_outputs_dialog.bl_idname)
+	
+	self.layout.operator_context = orig_context
+
 ## Register
 
 classes = (
 	BH_OT_prepare_bake,
 	BH_OT_connect_outputs,
-	BN_OT_connect_outputs_dialog,
+	BH_OT_connect_outputs_dialog,
 	BH_UL_active_bakenode_outputs_list,
 	BH_PT_bake_helper_panel,
 	BH_addon_preferences
 )
+
+# NODE_MT_context_menu
 
 def register():
 	for cls in classes:
 		bpy.utils.register_class(cls)
 		
 	bpy.types.Scene.bakenode_output_active_index = IntProperty(name = "Active Bakenode Output Index", default = 0)
+	
+	bpy.types.NODE_MT_context_menu.append(add_connect_bakenode_outputs_button)
 
 def unregister():
+	bpy.types.NODE_MT_context_menu.remove(add_connect_bakenode_outputs_button)
+	
 	del bpy.types.Scene.bakenode_output_active_index
 	
 	for cls in classes:

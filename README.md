@@ -10,10 +10,10 @@ I created this because I was tired going through the ol' baking checklist:
 Repeat for each material your objects have.
 
 ## Install  
-1. Download the python file (put it in a place where you can easily find it, like your desktop)
-2. In Blender's settings, go to the addons tab
-3. At the bottom, click "Install from File"
-4. Find where you put the python file, select it, and click "Install from File"
+Download the repository, Clone or Download > Download ZIP (put it in a place where you can easily find it, like your desktop)  
+In Blender's settings, go to the addons tab  
+At the bottom, click "Install from File"  
+Find where you put the ZIP file, select it, and click "Install from File"  
 
 ## Using  
 Bake Helper is in Properties Window > Render Tab > Bake Helper

@@ -29,11 +29,14 @@ Change the Bake Helper node's settings, e.g. the image you'll be baking to, if y
 
 After that, the selected objects should be ready to bake.
 ### BakeNode  
+![Picture showing name of BakeNode](GithubPictures/BakeNode_Name.png)  
 
 BakeNode is simply a node group which has a name that ends with BakeNode, like LemonWhole_BakeNode.  
 
+![Picture showing name of BakeNode](GithubPictures/BakeNode_Inside.png)  
 The idea is that you create a node group that has inputs going directly to outputs (it doesn't change the inputs in any way).  
 
+![Picture showing name of BakeNode](GithubPictures/BakeNode_Overview.png)  
 Then you connect whatever you want to bake into this node group.  
 
 When you want to bake the BakeNode outputs  

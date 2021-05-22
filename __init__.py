@@ -19,6 +19,7 @@ from render_bake_helper.bnodelib import *
 """
 TODO
 Add Master BakeNode
+	
 Add bake single bakenode output right click context menu
 Add bake active index to bakenode panel
 """
@@ -38,6 +39,7 @@ BAKEHELPER_DEFAULT_IMAGE_NAME = "BakeHelper"
 ## Helper Functions
 
 def get_image(name, size):
+	"""Gets image with name if it exists, otherwise it creates a new square one with size."""
 	if name in bpy.data.images:
 		return bpy.data.images[name]
 	else:
@@ -47,32 +49,79 @@ def get_image_advanced(name, width=1024, height=1024, color_type="sRGB", file_pa
 	"""Returns image if it exists, or creates new one if it doesn't exist."""
 	image = bpy.data.images.get(name, None)
 	
+	# If image already exists
 	if image:
 		bpy.data.images.remove(image)
 	
+	# Create new image
 	image = bpy.data.images.new(name, width, height, alpha=alpha, float_buffer=float_buffer)
 
 	image.alpha_mode = "STRAIGHT" if alpha else "NONE"
-	
 	image.filepath_raw = file_path
 	image.colorspace_settings.name = color_type
 	image.use_fake_user = use_fake_user
 	
 	return image
 
-def get_bakenode(bake_nodegroup_name, nodes):
-	"""Returns bakenode if it exists in node_tree, or returns None if it doesn't exist."""
-	for node in nodes:
-		if is_node_bakenode(node) and node.node_tree.name == bake_nodegroup_name:
-			return node
+def create_bakenode(material):
+	"""Attempts to create bakenode for material and will return None if BakeNode nodegroup doesn't already exist"""
+	prefs = get_addon_preferences()
+	
+	# Get bakenode nodegroup
+	bakenode_nodegroup = get_master_bakenode_nodegroup()
+	if not bakenode_nodegroup:
+		print(f"ERROR: {prefs.master_bakenode_name} nodegroup not in current blend file.")
+		return None
+	
+	# Create bakenode
+	bakenode = material.node_tree.nodes.new("ShaderNodeGroup")
+	bakenode.node_tree = bakenode_nodegroup
+	
+	return bakenode
+	
 
-	return None
+def get_bakenode(material, force_create=False):
+	"""
+	Returns bakenode if it exists in node_tree, or returns None and warns if it doesn't exist.
+	Can also create and return a new bakenode if one doesn't exist by either Create Missing BakeNodes in Prefs or
+	force_create parameter.
+	"""
+	prefs = get_addon_preferences()
+	bakenode_nodegroup_name = prefs.master_bakenode_name
+	bakenode = None
+	
+	for node in material.node_tree.nodes:
+		if is_node_bakenode(node) and node.node_tree.name == bakenode_nodegroup_name:
+			bakenode = node
+			break
+	
+	if not bakenode:
+		print(f"Warning: {material.name} did not have a valid bakenode!")
+		if force_create:
+			bakenode = create_bakenode(material)
+	
+	return bakenode
 
 def get_enum_bake_outputs(self, context):
 	"""Returns list of outputs of the active node as enums."""
 	enum_list = []
 	
 	bake_output_names = [output.name for output in context.active_object.active_material.node_tree.nodes.active.outputs]
+	
+	for index, output_name in enumerate(bake_output_names):
+		enum_list.append( (str(index), output_name, "", "", index) )
+	
+	return enum_list
+
+def get_enum_master_bakenode_outputs(self, context):
+	"""Returns list of outputs of the master bakenode nodegroup as enums."""
+	enum_list = []
+	
+	prefs = get_addon_preferences()
+	
+	bakenode_nodegroup = bpy.data.node_groups[prefs.master_bakenode_name]
+	
+	bake_output_names = [output.name for output in bakenode_nodegroup.outputs]
 	
 	for index, output_name in enumerate(bake_output_names):
 		enum_list.append( (str(index), output_name, "", "", index) )
@@ -117,24 +166,45 @@ def get_valid_mat_node_trees(objects, check_for_bakenode=False):
 			if not is_valid_mat(obj, material_slot):
 				continue
 			
+			mat_node_tree = material_slot.material.node_tree
+			
 			if check_for_bakenode:
-				current_bakenode = get_bakenode(bake_nodegroup_name, mat_node_tree.nodes)
+				current_bakenode = get_bakenode(material_slot.material, get_addon_preferences().create_missing_bakenode)
 				if current_bakenode is None:
-					print(active_bakenode.name + " bakenode not in " + material_slot.material.name)
 					continue
 			
-			mat_node_trees.append(material_slot.material.node_tree)
+			mat_node_trees.append(mat_node_tree)
 	
 	return mat_node_trees
+	
+def get_valid_mats(objects, check_for_bakenode=False):
+	"""Returns a list of valid materials node trees that have bakenodes"""
+	mats = []
+	
+	for obj in objects:
+		for material_slot in obj.material_slots:
+			# Validate mat and nodetree
+			if not is_valid_mat(obj, material_slot):
+				continue
+			
+			mat = material_slot.material
+			
+			if check_for_bakenode:
+				current_bakenode = get_bakenode(mat, get_addon_preferences().create_missing_bakenode)
+				if current_bakenode is None:
+					continue
+			
+			mats.append(mat)
+	
+	return mats
 
-def bake_bakenode_output(self, context, bake_nodegroup_name, bakenode_output_index):
-	active_mat_nodes = context.active_object.active_material.node_tree.nodes
+def bake_bakenode_output(self, context, bakenode_output_index):
+	prefs = get_addon_preferences()
 	
-	active_bakenode = get_bakenode(bake_nodegroup_name, active_mat_nodes)
-	active_bake_nodegroup = active_bakenode.node_tree
+	bakenode_nodegroup = bpy.data.node_groups[prefs.master_bakenode_name]
 	
-	bake_nodegroup_output = active_bake_nodegroup.outputs[bakenode_output_index]
-	bakenode_output_settings = bake_nodegroup_output.bakenode_output_settings
+	bakenode_nodegroup_output = bakenode_nodegroup.outputs[bakenode_output_index]
+	bakenode_output_settings = bakenode_nodegroup_output.bakenode_output_settings
 	
 	# Save original settings
 	orig_render_samples = context.scene.cycles.samples
@@ -143,27 +213,27 @@ def bake_bakenode_output(self, context, bake_nodegroup_name, bakenode_output_ind
 	# Set BakeHelper node as active
 	bpy.ops.render.bh_ot_prepare_bake()
 	
-	mat_node_trees = get_valid_mat_node_trees(context.selected_objects, check_for_bakenode=True)
-	for mat_node_tree in mat_node_trees:
-		current_bakenode = get_bakenode(active_bake_nodegroup.name, mat_node_tree.nodes)
+	mats = get_valid_mats(context.selected_objects, check_for_bakenode=True)
+	for mat in mats:
+		current_bakenode = get_bakenode(mat)
 		
 		# Get Bakenode Emission and Material Output
-		bakenode_emission = get_node("BakeNode_Emission", mat_node_tree.nodes, "ShaderNodeEmission")
-		material_output = get_node("Material Output", mat_node_tree.nodes, "ShaderNodeOutputMaterial")
-		bakehelper_node = mat_node_tree.nodes.active
+		bakenode_emission = get_node("BakeNode_Emission", mat.node_tree.nodes, "ShaderNodeEmission")
+		material_output = get_node("Material Output", mat.node_tree.nodes, "ShaderNodeOutputMaterial")
+		bakehelper_node = mat.node_tree.nodes.active
 		
 		# Connect Bakenode output to BakeNode_Emission
-		if bake_nodegroup_output.name.upper() in OUTPUT_NAME_TO_BAKETYPE_MAP.keys():
+		if bakenode_nodegroup_output.name.upper() in OUTPUT_NAME_TO_BAKETYPE_MAP.keys():
 			if "BSDF" not in current_bakenode.outputs:
 				print("BSDF output needed for special bakes.")
 			else:
 				# Connect BSDF to mat output
-				mat_node_tree.links.new(current_bakenode.outputs["BSDF"], material_output.inputs[0])
+				mat.node_tree.links.new(current_bakenode.outputs["BSDF"], material_output.inputs[0])
 		else:
-			mat_node_tree.links.new(current_bakenode.outputs[bakenode_output_index], bakenode_emission.inputs[0])
+			mat.node_tree.links.new(current_bakenode.outputs[bakenode_output_index], bakenode_emission.inputs[0])
 		
 			# Connect BakeNode_Emission to Material Output
-			mat_node_tree.links.new(bakenode_emission.outputs[0], material_output.inputs[0])
+			mat.node_tree.links.new(bakenode_emission.outputs[0], material_output.inputs[0])
 		
 		# Switch active BakeHelper image to output bake image, or use BakeHelper image if no image
 		if bakenode_output_settings.output_image_name:
@@ -182,7 +252,7 @@ def bake_bakenode_output(self, context, bake_nodegroup_name, bakenode_output_ind
 	# Do other special bakes based on output name, like NormalBAKE or AOBAKE
 	# Bake emission if name isn't special
 	bpy.ops.object.bake(
-		type=OUTPUT_NAME_TO_BAKETYPE_MAP.get(bake_nodegroup_output.name.upper(), "EMIT")
+		type=OUTPUT_NAME_TO_BAKETYPE_MAP.get(bakenode_nodegroup_output.name.upper(), "EMIT")
 	)
 	
 	# Save image if autosave is on
@@ -204,6 +274,9 @@ def bake_bakenode_output(self, context, bake_nodegroup_name, bakenode_output_ind
 def get_addon_preferences():
 	return bpy.context.preferences.addons[__package__].preferences
 
+def get_master_bakenode_nodegroup():
+	prefs = get_addon_preferences()
+	return bpy.data.node_groups.get(prefs.master_bakenode_name, None)
 
 ## Structs
 
@@ -345,8 +418,9 @@ class BH_OT_prepare_bake(Operator):
 		return context.active_object
 
 	def execute(self, context):
-		mat_node_trees = get_valid_mat_node_trees(context.selected_objects)
-		for node_tree in mat_node_trees:
+		mats = get_valid_mats(context.selected_objects)
+		for mat in mat_node_trees:
+			node_tree = mat.node_tree
 			# set bake image
 			# if an image isn't set for material, use default bakehelper image
 			bake_image_name = BAKEHELPER_DEFAULT_IMAGE_NAME
@@ -405,22 +479,20 @@ class BH_OT_connect_bakenode_output(Operator):
 			obj and
 			obj.active_material and
 			obj.active_material.node_tree.nodes.active and
-			is_node_bakenode(obj.active_material.node_tree.nodes.active)
+			get_master_bakenode_nodegroup() is not None
 		)
 	
 	def execute(self, context):
-		"""Goes thru selected objects with material node trees and bakenodes, and"""
-		active_bakenode = context.active_object.active_material.node_tree.nodes.active
-		bake_nodegroup_name = active_bakenode.node_tree.name
+		prefs = get_addon_preferences()
 		
-		mat_node_trees = get_valid_mat_node_trees(context.selected_objects, check_for_bakenode=True)
+		mats = get_valid_mats(context.selected_objects, check_for_bakenode=True)
 		
-		for mat_node_tree in mat_node_trees:
-			current_bakenode = get_bakenode(bake_nodegroup_name, mat_node_tree.nodes)
+		for mat in mats:
+			current_bakenode = get_bakenode(mat)
 			
 			# Get nodes
-			bakenode_emission = get_node("BakeNode_Emission", mat_node_tree.nodes, "ShaderNodeEmission")
-			material_output = get_node("Material Output", mat_node_tree.nodes, "ShaderNodeOutputMaterial")
+			bakenode_emission = get_node("BakeNode_Emission", mat.node_tree.nodes, "ShaderNodeEmission")
+			material_output = get_node("Material Output", mat.node_tree.nodes, "ShaderNodeOutputMaterial")
 			
 			# Position BakeNode Emission
 			set_node_relative_location(material_output, bakenode_emission, horz_align="CENTER", vert_align="TOP", vert_padding=80)
@@ -429,9 +501,9 @@ class BH_OT_connect_bakenode_output(Operator):
 			bakenode_emission.hide = True
 			
 			# connect bake output to BakeNode_Emission
-			mat_node_tree.links.new(current_bakenode.outputs[int(self.bakenode_output_index)], bakenode_emission.inputs[0])
+			mat.node_tree.links.new(current_bakenode.outputs[int(self.bakenode_output_index)], bakenode_emission.inputs[0])
 			# connect BakeNode_Emission to Material Output
-			mat_node_tree.links.new(bakenode_emission.outputs[0], material_output.inputs[0])
+			mat.node_tree.links.new(bakenode_emission.outputs[0], material_output.inputs[0])
 		
 		return {'FINISHED'}
 
@@ -444,7 +516,7 @@ class BH_OT_connect_bakenode_output_dialog(Operator):
 	
 	# Properties
 	bakenode_output_index : EnumProperty(
-		items=get_enum_bake_outputs,
+		items=get_enum_master_bakenode_outputs,
 		name="Bake Output",
 		description="Node Output to bake."
 	)
@@ -452,10 +524,12 @@ class BH_OT_connect_bakenode_output_dialog(Operator):
 	@classmethod
 	def poll(cls, context):
 		obj = context.active_object
-		return obj and \
-			obj.active_material and \
-			obj.active_material.node_tree.nodes.active and \
-			is_node_bakenode(obj.active_material.node_tree.nodes.active)
+		return (
+			obj and
+			obj.active_material and
+			obj.active_material.node_tree.nodes.active and
+			get_master_bakenode_nodegroup() is not None
+		)
 		
 	def invoke(self, context, event):
 		return context.window_manager.invoke_props_dialog(self)
@@ -547,8 +621,6 @@ class BH_OT_bake_material_results_dialog(Operator):
 		active_mat_nodes = context.active_object.active_material.node_tree.nodes
 		active_node = active_mat_nodes.active
 		
-		## Run bakehelper
-		## Bake
 		""" """
 		# Save original settings
 		orig_render_samples = context.scene.cycles.samples
@@ -557,6 +629,7 @@ class BH_OT_bake_material_results_dialog(Operator):
 		# Set BakeHelper node as active
 		bpy.ops.render.bh_ot_prepare_bake()
 		
+		# create image for bakehelper nodes to use
 		bake_image = get_image_advanced(
 			BAKEHELPER_DEFAULT_IMAGE_NAME,
 			self.bake_image_width,
@@ -567,9 +640,9 @@ class BH_OT_bake_material_results_dialog(Operator):
 			self.float_buffer
 		)
 		
-		mat_node_trees = get_valid_mat_node_trees(context.selected_objects)
-		for mat_node_tree in mat_node_trees:
-			bakehelper_node = mat_node_tree.nodes.active
+		mats = get_valid_mats(context.selected_objects)
+		for mat in mats:
+			bakehelper_node = mat.node_tree.nodes.active
 			bakehelper_node.image = bake_image
 		
 		# Use samples from bakenode output
@@ -604,7 +677,7 @@ class BH_OT_bake_single_bakenode_output_dialog(Operator):
 	
 	# Properties
 	bakenode_output_index : EnumProperty(
-		items=get_enum_bake_outputs,
+		items=get_enum_master_bakenode_outputs,
 		name="Bake Output",
 		description="Node Output to bake."
 	)
@@ -633,20 +706,20 @@ class BH_OT_bake_single_bakenode_output_dialog(Operator):
 			obj and
 			obj.active_material and
 			obj.active_material.node_tree.nodes.active and
-			is_node_bakenode(obj.active_material.node_tree.nodes.active)
+			get_master_bakenode_nodegroup() is not None
 		)
 		
 	def invoke(self, context, event):
 		return context.window_manager.invoke_props_dialog(self)
 
 	def execute(self, context):
+		mat = context.active_object.active_material
 		bakenode_output_index = int(self.bakenode_output_index)
-		active_mat_nodes = context.active_object.active_material.node_tree.nodes
-		active_bakenode = active_mat_nodes.active
-		bake_nodegroup_name = active_bakenode.node_tree.name
+		active_mat_nodes = mat.node_tree.nodes
+		active_bakenode = get_bakenode(mat)
 		
 		# Bake single output
-		bake_bakenode_output(self, context, bake_nodegroup_name, bakenode_output_index)
+		bake_bakenode_output(self, context, bakenode_output_index)
 		
 		# Make BakeNode active again
 		deselect_all_nodes(active_mat_nodes)
@@ -683,29 +756,30 @@ class BH_OT_batch_bake_bakenode_outputs(Operator):
 	@classmethod
 	def poll(cls, context):
 		obj = context.active_object
-		return obj and \
-			obj.active_material and \
-			obj.active_material.node_tree.nodes.active and \
-			is_node_bakenode(obj.active_material.node_tree.nodes.active)
+		return (
+			obj and
+			obj.active_material and
+			obj.active_material.node_tree.nodes.active and
+			get_master_bakenode_nodegroup() is not None
+		)
 
 	def execute(self, context):
 		# save bakenode to variable
 		active_mat_nodes = context.active_object.active_material.node_tree.nodes
-		active_bakenode = context.active_object.active_material.node_tree.nodes.active
-		bake_nodegroup_name = active_bakenode.node_tree.name
-		active_bakenode_group = context.active_object.active_material.node_tree.nodes.active.node_tree
+		active_node = context.active_object.active_material.node_tree.nodes.active
+		bakenode_nodegroup = get_master_bakenode_nodegroup()
 		
 		# Get enabled outputs
-		enabled_outputs = tuple( (index, output) for index, output in enumerate(active_bakenode_group.outputs) if output.bakenode_output_settings.enabled )
+		enabled_outputs = tuple( (index, output) for index, output in enumerate(bakenode_nodegroup.outputs) if output.bakenode_output_settings.enabled )
 		
 		for output_index, output in enabled_outputs:
-			print("Baking output:", str(output_index))
-			bake_bakenode_output(self, context, bake_nodegroup_name, output_index)
+			print(f"Baking output: {str(output_index)}, {output}")
+			bake_bakenode_output(self, context, output_index)
 		
 		# Make BakeNode active again
 		deselect_all_nodes(active_mat_nodes)
-		active_bakenode.select = True
-		active_mat_nodes.active = active_bakenode
+		active_node.select = True
+		active_mat_nodes.active = active_node
 		
 		return {'FINISHED'}
 
@@ -775,14 +849,10 @@ class BH_OT_create_bakenode_output_image_name(Operator):
 	
 	@classmethod
 	def poll(cls, context):
-		obj = context.active_object
-		return obj and \
-			obj.active_material and \
-			obj.active_material.node_tree.nodes.active and \
-			is_node_bakenode(obj.active_material.node_tree.nodes.active)
+		return get_master_bakenode_nodegroup() is not None
 
 	def execute(self, context):
-		active_node_group = context.active_object.active_material.node_tree.nodes.active.node_tree
+		bakenode_nodegroup = get_master_bakenode_nodegroup()
 		active_output_index = self.bakenode_output_index
 		
 		image = get_image_advanced(self.image_name, width=self.width, height=self.height, color_type=self.color_type, alpha=self.alpha, float_buffer=self.float_buffer, use_fake_user=self.use_fake_user)
@@ -797,7 +867,7 @@ class BH_OT_create_bakenode_output_image_name(Operator):
 			image.filepath_raw = self.file_path + image.name + ".png"
 			image.save()
 		
-		active_node_group.outputs[active_output_index].bakenode_output_settings.output_image_name = image.name
+		bakenode_nodegroup.outputs[active_output_index].bakenode_output_settings.output_image_name = image.name
 		
 		return {'FINISHED'}
 
@@ -862,17 +932,12 @@ class BH_OT_create_bakenode_output_image_name_dialog(Operator):
 	
 	@classmethod
 	def poll(cls, context):
-		obj = context.active_object
-		return obj and \
-			obj.active_material and \
-			obj.active_material.node_tree.nodes.active and \
-			is_node_bakenode(obj.active_material.node_tree.nodes.active)
+		return get_master_bakenode_nodegroup() is not None
 		
 	def invoke(self, context, event):
 		return context.window_manager.invoke_props_dialog(self)
 
 	def execute(self, context):
-		#active_node_group = context.active_object.active_material.node_tree.nodes.active.node_tree
 		self.bakenode_output_index = context.scene.bakenode_output_active_index
 		
 		BH_OT_create_bakenode_output_image_name.execute(self, context)
@@ -915,22 +980,18 @@ class BH_OT_batch_create_bakenode_output_image_name_dialog(Operator):
 	
 	@classmethod
 	def poll(cls, context):
-		obj = context.active_object
-		return obj and \
-			obj.active_material and \
-			obj.active_material.node_tree.nodes.active and \
-			is_node_bakenode(obj.active_material.node_tree.nodes.active)
+		return get_master_bakenode_nodegroup() is not None
 		
 	def invoke(self, context, event):
 		return context.window_manager.invoke_props_dialog(self)
 
 	def execute(self, context):
-		active_bake_nodegroup = context.active_object.active_material.node_tree.nodes.active.node_tree
+		bakenode_nodegroup = get_master_bakenode_nodegroup()
 		self.save_to_disk = False
 		self.file_path = ""
-		prefix = active_bake_nodegroup.name[:active_bake_nodegroup.name.find("BakeNode")]
+		prefix = bakenode_nodegroup.name[:bakenode_nodegroup.name.find("BakeNode")]
 		
-		for i, output in enumerate(active_bake_nodegroup.outputs):
+		for i, output in enumerate(bakenode_nodegroup.outputs):
 			if not output.bakenode_output_settings.enabled:
 				continue
 			
@@ -961,19 +1022,15 @@ class BH_OT_batch_set_bakenode_output_image_name_fake_user_dialog(Operator):
 	
 	@classmethod
 	def poll(cls, context):
-		obj = context.active_object
-		return obj and \
-			obj.active_material and \
-			obj.active_material.node_tree.nodes.active and \
-			is_node_bakenode(obj.active_material.node_tree.nodes.active)
+		return get_master_bakenode_nodegroup() is not None
 		
 	def invoke(self, context, event):
 		return context.window_manager.invoke_props_dialog(self)
 
 	def execute(self, context):
-		active_bake_nodegroup = context.active_object.active_material.node_tree.nodes.active.node_tree
+		bakenode_nodegroup = get_master_bakenode_nodegroup()
 		
-		for output in active_bake_nodegroup.outputs:
+		for output in bakenode_nodegroup.outputs:
 			if not output.bakenode_output_settings.enabled:
 				continue
 			
@@ -1007,25 +1064,21 @@ class BH_OT_create_bakenode_output_dialog(Operator):
 	
 	@classmethod
 	def poll(cls, context):
-		obj = context.active_object
-		return obj and \
-			obj.active_material and \
-			obj.active_material.node_tree.nodes.active and \
-			is_node_bakenode(obj.active_material.node_tree.nodes.active)
+		return get_master_bakenode_nodegroup() is not None
 		
 	def invoke(self, context, event):
 		return context.window_manager.invoke_props_dialog(self)
 
 	def execute(self, context):
-		active_bake_nodegroup = context.active_object.active_material.node_tree.nodes.active.node_tree
+		bakenode_nodegroup = get_master_bakenode_nodegroup()
 		
-		input_node = get_node("Group Input", active_bake_nodegroup.nodes, "NodeGroupInput")
-		output_node = get_node("Group Output", active_bake_nodegroup.nodes, "NodeGroupOutput")
+		input_node = get_node("Group Input", bakenode_nodegroup.nodes, "NodeGroupInput")
+		output_node = get_node("Group Output", bakenode_nodegroup.nodes, "NodeGroupOutput")
 		
-		input = active_bake_nodegroup.inputs.new(self.color_type, self.name)
-		output = active_bake_nodegroup.outputs.new(self.color_type, self.name)
+		input = bakenode_nodegroup.inputs.new(self.color_type, self.name)
+		output = bakenode_nodegroup.outputs.new(self.color_type, self.name)
 		
-		active_bake_nodegroup.links.new(input_node.outputs[input.name], output_node.inputs[output.name])
+		bakenode_nodegroup.links.new(input_node.outputs[input.name], output_node.inputs[output.name])
 		
 		return {'FINISHED'}
 
@@ -1059,16 +1112,12 @@ class BH_OT_batch_save_bakenode_outputs(Operator):
 	
 	@classmethod
 	def poll(cls, context):
-		obj = context.active_object
-		return obj and \
-			obj.active_material and \
-			obj.active_material.node_tree.nodes.active and \
-			is_node_bakenode(obj.active_material.node_tree.nodes.active)
+		return get_master_bakenode_nodegroup() is not None
 
 	def execute(self, context):
-		active_bake_nodegroup = context.active_object.active_material.node_tree.nodes.active.node_tree
+		bakenode_nodegroup = get_master_bakenode_nodegroup()
 		
-		for output in active_bake_nodegroup.outputs:
+		for output in bakenode_nodegroup.outputs:
 			
 			if not output.bakenode_output_settings.output_image_name or not output.bakenode_output_settings.enabled:
 				continue
@@ -1103,27 +1152,31 @@ class BH_OT_create_bakenode_output_image_name_node_dialog(Operator):
 	
 	# Properties
 	bakenode_output_index : EnumProperty(
-		items=get_enum_bake_outputs,
+		items=get_enum_master_bakenode_outputs,
 		name="Bake Output",
 	)
 	
 	@classmethod
 	def poll(cls, context):
 		obj = context.active_object
-		return obj and \
-			obj.active_material and \
-			obj.active_material.node_tree.nodes.active and \
-			is_node_bakenode(obj.active_material.node_tree.nodes.active)
+		return (
+			obj and
+			obj.active_material and
+			obj.active_material.node_tree and
+			get_master_bakenode_nodegroup() is not None and
+			get_bakenode(obj.active_material)
+		)
 		
 	def invoke(self, context, event):
 		return context.window_manager.invoke_props_dialog(self)
 
 	def execute(self, context):
+		active_mat = context.active_object.active_material
 		bakenode_output_index = int(self.bakenode_output_index)
-		active_mat_nodes = context.active_object.active_material.node_tree.nodes
-		active_bakenode = context.active_object.active_material.node_tree.nodes.active
-		active_bake_nodegroup = context.active_object.active_material.node_tree.nodes.active.node_tree
-		bake_nodegroup_output = active_bake_nodegroup.outputs[bakenode_output_index]
+		active_mat_nodes = active_mat.node_tree.nodes
+		active_bakenode = get_bakenode(active_mat)
+		bakenode_nodegroup = get_master_bakenode_nodegroup()
+		bake_nodegroup_output = bakenode_nodegroup.outputs[bakenode_output_index]
 		bake_nodegroup_output_settings = bake_nodegroup_output.bakenode_output_settings
 		
 		output_image_name = bake_nodegroup_output_settings.output_image_name
@@ -1155,22 +1208,26 @@ class BH_OT_create_bakenode_output_image_name_nodes(Operator):
 	@classmethod
 	def poll(cls, context):
 		obj = context.active_object
-		return obj and \
-			obj.active_material and \
-			obj.active_material.node_tree.nodes.active and \
-			is_node_bakenode(obj.active_material.node_tree.nodes.active)
+		return (
+			obj and
+			obj.active_material and
+			obj.active_material.node_tree.nodes.active and
+			get_master_bakenode_nodegroup() and
+			get_bakenode(obj.active_material)
+		)
 
 	def execute(self, context):
-		active_mat_nodes = context.active_object.active_material.node_tree.nodes
-		active_bakenode = active_mat_nodes.active
-		active_bake_nodegroup = active_bakenode.node_tree
+		mat = context.active_object.active_material
+		active_mat_nodes = mat.node_tree.nodes
+		bakenode = get_bakenode(mat)
+		bakenode_nodegroup = get_master_bakenode_nodegroup()
 		
 		# For positioning image nodes
-		last_node = active_bakenode
+		last_node = bakenode
 		
 		deselect_all_nodes(active_mat_nodes)
 		
-		for output in active_bake_nodegroup.outputs:
+		for output in bakenode_nodegroup.outputs:
 			output_image_name = output.bakenode_output_settings.output_image_name
 		
 			if output_image_name and output_image_name in bpy.data.images:
@@ -1209,25 +1266,19 @@ class BH_OT_show_bakenode_output_image_name_in_editor(Operator):
 	
 	@classmethod
 	def poll(cls, context):
-		obj = context.active_object
-		return (
-			obj and
-			obj.active_material and
-			obj.active_material.node_tree.nodes.active and
-			is_node_bakenode(obj.active_material.node_tree.nodes.active)
-		)
+		return get_master_bakenode_nodegroup()
 
 	def execute(self, context):
 		bakenode_output_index = int(self.bakenode_output_index)
-		active_bake_nodegroup = context.active_object.active_material.node_tree.nodes.active.node_tree
-		bake_nodegroup_output = active_bake_nodegroup.outputs[bakenode_output_index]
-		bake_nodegroup_output_settings = bake_nodegroup_output.bakenode_output_settings
+		bakenode_nodegroup = get_master_bakenode_nodegroup()
+		bakenode_nodegroup_output = bakenode_nodegroup.outputs[bakenode_output_index]
+		bakenode_nodegroup_output_settings = bakenode_nodegroup_output.bakenode_output_settings
 		
 		for area in context.screen.areas:
 			if area.type == "IMAGE_EDITOR":
 				# check if output image is valid
-				if bake_nodegroup_output_settings.output_image_name in bpy.data.images:
-					area.spaces[0].image = bpy.data.images[bake_nodegroup_output_settings.output_image_name]
+				if bakenode_nodegroup_output_settings.output_image_name in bpy.data.images:
+					area.spaces[0].image = bpy.data.images[bakenode_nodegroup_output_settings.output_image_name]
 				else:
 					area.spaces[0].image = bpy.data.images[BAKEHELPER_DEFAULT_IMAGE_NAME]
 				break
@@ -1316,17 +1367,14 @@ class BH_PT_bakenode_settings(Panel):
 		layout = self.layout
 		obj = context.active_object
 		
-		if obj and \
-				obj.active_material and \
-				obj.active_material.node_tree.nodes.active and \
-				is_node_bakenode(obj.active_material.node_tree.nodes.active):
-			bake_nodegroup = obj.active_material.node_tree.nodes.active.node_tree
+		if get_master_bakenode_nodegroup():
+			bakenode_nodegroup = get_master_bakenode_nodegroup()
 			bakenode_active_output_index = context.scene.bakenode_output_active_index
-			active_bakenode_output_settings = bake_nodegroup.outputs[bakenode_active_output_index].bakenode_output_settings
+			active_bakenode_output_settings = bakenode_nodegroup.outputs[bakenode_active_output_index].bakenode_output_settings
 			
 			layout.label(text="BakeNode Outputs")
 			# List of bakenode outputs
-			layout.template_list("BH_UL_active_bakenode_outputs_list", "", bake_nodegroup, "outputs", context.scene, "bakenode_output_active_index")
+			layout.template_list("BH_UL_active_bakenode_outputs_list", "", bakenode_nodegroup, "outputs", context.scene, "bakenode_output_active_index")
 			# Connect active bakenode output
 			layout.operator(BH_OT_connect_bakenode_output.bl_idname).bakenode_output_index = bakenode_active_output_index
 			
@@ -1383,7 +1431,8 @@ class BH_PT_bakenode_settings(Panel):
 			op_settings.save = context.scene.bakenode_ui_settings.batch_image_save
 			
 		else:
-			layout.label(text="BakeNode not selected.")
+			prefs = get_addon_preferences()
+			layout.label(text=f"BakeNode '{prefs.master_bakenode_name}' doesn't exist.")
 
 class BH_PT_bakenode_settings_node_editor(Panel):
 	bl_idname = "BH_PT_bakenode_settings_node_editor"

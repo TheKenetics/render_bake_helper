@@ -875,7 +875,7 @@ class BH_OT_create_bakenode_output_image_name_dialog(Operator):
 	bl_options = {'REGISTER','UNDO'}
 	
 	# Properties
-	name : StringProperty(
+	image_name : StringProperty(
 		name="Image Name",
 		default="New BakeNode Image"
 	)
@@ -993,10 +993,7 @@ class BH_OT_batch_create_bakenode_output_image_name_dialog(Operator):
 			
 			self.bakenode_output_index = i
 			self.image_name = prefix + output.name
-			if output.type == "RGBA":
-				self.color_type = "sRGB"
-			else:
-				self.color_type = "Non-Color"
+			self.color_type = "sRGB" if output.type == "RGBA" else "Non-Color"
 			
 			BH_OT_create_bakenode_output_image_name.execute(self, context)
 			
@@ -1018,7 +1015,7 @@ class BH_OT_batch_set_bakenode_output_image_name_fake_user_dialog(Operator):
 	
 	@classmethod
 	def poll(cls, context):
-		return get_master_bakenode_nodegroup() is not None
+		return get_master_bakenode_nodegroup()
 		
 	def invoke(self, context, event):
 		return context.window_manager.invoke_props_dialog(self)
@@ -1505,11 +1502,13 @@ def add_connect_bakenode_outputs_button(self, context):
 	orig_context = self.layout.operator_context
 	
 	self.layout.operator_context = "INVOKE_DEFAULT"
+	self.layout.operator(BH_OT_create_bakenode_output_dialog.bl_idname)
 	self.layout.operator(BH_OT_connect_bakenode_output_dialog.bl_idname)
 	self.layout.operator(BH_OT_bake_single_bakenode_output_dialog.bl_idname)
 	self.layout.operator(BH_OT_create_bakenode_output_image_name_node_dialog.bl_idname)
 	self.layout.operator(BH_OT_create_bakenode_output_image_name_nodes.bl_idname)
 	self.layout.operator(BH_OT_bake_material_results_dialog.bl_idname)
+	self.layout.operator(BH_OT_prepare_bake.bl_idname)
 	
 	self.layout.operator_context = orig_context
 

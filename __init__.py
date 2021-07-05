@@ -262,9 +262,6 @@ def bake_bakenode_output(self, context, bakenode_output_index):
 		else:
 			bake_image.save()
 	
-	if self.autopack and not bake_image.filepath_raw:
-		bake_image.pack()
-	
 	# Restore original settings
 	context.scene.cycles.samples = orig_render_samples
 	context.scene.render.bake.margin = orig_padding
@@ -382,12 +379,6 @@ class BH_bakenode_ui_settings(PropertyGroup):
 	batch_image_save : BoolProperty(
 		name="Batch Image Save",
 		description="If enabled, will batch save images.",
-		default=False
-	)
-	
-	batch_bake_autopack : BoolProperty(
-		name="Batch Bake Autopack",
-		description="If enabled, will pack images that don't have paths or aren't saved.",
 		default=False
 	)
 	
@@ -685,12 +676,6 @@ class BH_OT_bake_single_bakenode_output_dialog(Operator):
 		default=False
 	)
 	
-	autopack : BoolProperty(
-		name="Autopack Bake Image",
-		description="Autopacks bake image if not on disk.",
-		default=False
-	)
-	
 	autopadding : BoolProperty(
 		name="Autopadding",
 		description="Calculate padding based on image width.",
@@ -736,12 +721,6 @@ class BH_OT_batch_bake_bakenode_outputs(Operator):
 	# Properties
 	bake_image_autosave : BoolProperty(
 		name="Bake Image Autosave",
-		default=False
-	)
-	
-	autopack : BoolProperty(
-		name="Autopack",
-		description="Packs image if not on disk",
 		default=False
 	)
 	
@@ -836,7 +815,7 @@ class BH_OT_create_bakenode_output_image_name(Operator):
 	
 	save_to_disk : BoolProperty(
 		name="Save to Disk",
-		description="Save image to disk after creation, otherwise, image will be packed inside blend file.",
+		description="Save image to disk after creation.",
 		default=False
 	)
 	
@@ -924,7 +903,7 @@ class BH_OT_create_bakenode_output_image_name_dialog(Operator):
 	
 	save_to_disk : BoolProperty(
 		name="Save to Disk",
-		description="Save image to disk after creation, otherwise, image will be packed inside blend file.",
+		description="Save image to disk after creation.",
 		default=False
 	)
 	
@@ -1128,10 +1107,7 @@ class BH_OT_batch_save_bakenode_outputs(Operator):
 			print("path in batch save", image.filepath_raw)
 			
 			if self.save:
-				if image.packed_file:
-					image.unpack(method="WRITE_LOCAL")
-				else:
-					image.save()
+				image.save()
 		
 		return {'FINISHED'}
 
@@ -1395,10 +1371,8 @@ class BH_PT_bakenode_settings(Panel):
 			# 
 			op_settings = layout.operator(BH_OT_batch_bake_bakenode_outputs.bl_idname, text="BakeNode Batch Bake")
 			op_settings.bake_image_autosave = context.scene.bakenode_bake_settings.bake_image_autosave
-			op_settings.autopack = context.scene.bakenode_ui_settings.batch_bake_autopack
 			
 			layout.prop(context.scene.bakenode_bake_settings, "bake_image_autosave")
-			layout.prop(context.scene.bakenode_ui_settings, "batch_bake_autopack")
 			
 			layout.separator()
 			
@@ -1495,9 +1469,6 @@ class BH_addon_preferences(AddonPreferences):
 			layout.label(text="Select object you want to bake.",icon="THREE_DOTS")
 			layout.label(text="Right click Bakenode.",icon="THREE_DOTS")
 			layout.label(text="Click 'Bake Bakenode Output'",icon="THREE_DOTS")
-			
-			layout.label(text="Packed Images:", icon="DOT")
-			layout.label(text="If an image has no path, they will automatically be packed when baked.",icon="THREE_DOTS")
 
 ## Append to UI Helper Functions
 def add_connect_bakenode_outputs_button(self, context):

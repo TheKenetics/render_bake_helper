@@ -209,6 +209,12 @@ def bake_bakenode_output(self, context, bakenode_output_index):
 	# Set BakeHelper node as active
 	bpy.ops.render.bh_ot_prepare_bake()
 	
+	# Switch active BakeHelper image to output bake image, or use BakeHelper image if no image
+	if bakenode_output_settings.output_image_name:
+		bake_image = bpy.data.images[bakenode_output_settings.output_image_name]
+	else:
+		bake_image = bpy.data.images[BAKEHELPER_DEFAULT_IMAGE_NAME]
+	
 	mats = get_valid_mats(context.selected_objects, check_for_bakenode=True)
 	for mat in mats:
 		current_bakenode = get_bakenode(mat)
@@ -231,18 +237,15 @@ def bake_bakenode_output(self, context, bakenode_output_index):
 			# Connect BakeNode_Emission to Material Output
 			mat.node_tree.links.new(bakenode_emission.outputs[0], material_output.inputs[0])
 		
-		# Switch active BakeHelper image to output bake image, or use BakeHelper image if no image
-		if bakenode_output_settings.output_image_name:
-			bakehelper_node.image = bpy.data.images[bakenode_output_settings.output_image_name]
-		else:
-			bakehelper_node.image = bpy.data.images[BAKEHELPER_DEFAULT_IMAGE_NAME]
+		# Set bake image
+		bakehelper_node.image = bake_image
 	
 	# Use samples from bakenode output
 	context.scene.cycles.samples = bakenode_output_settings.samples
 	
 	# Calc padding
 	if self.autopadding:
-		image_width = bpy.data.images[bakenode_output_settings.output_image_name].size[0]
+		image_width = bake_image.size[0]
 		context.scene.render.bake.margin = calc_padding(bakenode_output_settings.padding_per_128, image_width)
 	
 	# Do other special bakes based on output name, like NormalBAKE or AOBAKE
@@ -254,14 +257,13 @@ def bake_bakenode_output(self, context, bakenode_output_index):
 	# Save image if autosave is on
 	#if context.scene.bakenode_bake_settings.bake_image_autosave:
 	if self.bake_image_autosave:
-		if (not bakenode_output_settings.output_image_name and not bpy.data.images[BAKEHELPER_DEFAULT_IMAGE_NAME].filepath) \
-				or not bpy.data.images[bakenode_output_settings.output_image_name].filepath:
-			print("Image is not saved! " + bakenode_output_settings.output_image_name)
+		if not bake_image.filepath:
+			print(f"Image {bake_image.name} not saved because no filepath!")
 		else:
-			bpy.data.images[bakenode_output_settings.output_image_name].save()
+			bake_image.save()
 	
-	if self.autopack and not bpy.data.images[bakenode_output_settings.output_image_name].filepath_raw:
-		bpy.data.images[bakenode_output_settings.output_image_name].pack()
+	if self.autopack and not bake_image.filepath_raw:
+		bake_image.pack()
 	
 	# Restore original settings
 	context.scene.cycles.samples = orig_render_samples

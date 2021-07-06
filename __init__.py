@@ -94,7 +94,6 @@ def create_bakenode(material):
 	set_node_relative_location(mat_output, bakenode, 50, 40, "BOTTOM", "CENTER")
 	
 	return bakenode
-	
 
 def get_bakenode(material, force_create=False):
 	"""
@@ -203,9 +202,8 @@ def bake_bakenode_output(self, context, bakenode_output_index):
 	bpy.ops.render.bh_ot_prepare_bake()
 	
 	# Switch active BakeHelper image to output bake image, or use BakeHelper image if no image
-	if bakenode_output_settings.output_image_name:
-		bake_image = bpy.data.images[bakenode_output_settings.output_image_name]
-	else:
+	bake_image = bakenode_output_settings.get_image()
+	if not bake_image:
 		bake_image = bpy.data.images[BAKEHELPER_DEFAULT_IMAGE_NAME]
 	
 	mats = get_valid_mats(context.selected_objects, check_for_bakenode=True)
@@ -326,6 +324,12 @@ class BH_bakenode_output_settings(PropertyGroup):
 		description="Padding to add per multiple of 128. EG: 1p for 128px, 2px for 256px...",
 		default=1.0
 	)
+	
+	def get_image(self):
+		if self.output_image_name:
+			return bpy.data.images.get(self.output_image_name, None)
+		else:
+			return None
 
 
 class BH_bakenode_bake_settings(PropertyGroup):
@@ -867,8 +871,9 @@ class BH_OT_batch_set_bakenode_output_image_name_fake_user_dialog(Operator):
 		
 		for output in bakenode_nodegroup.outputs:
 			if output.bakenode_output_settings.enabled:
-				if output.bakenode_output_settings.output_image_name:
-					bpy.data.images[output.bakenode_output_settings.output_image_name].use_fake_user = self.use_fake_user
+				bake_image = output.bakenode_output_settings.get_image()
+				if bake_image:
+					bake_image.use_fake_user = self.use_fake_user
 		
 		return {'FINISHED'}
 
@@ -932,10 +937,9 @@ class BH_OT_batch_save_bakenode_outputs(Operator):
 		bakenode_nodegroup = get_master_bakenode_nodegroup()
 		
 		for output in bakenode_nodegroup.outputs:
-			if not output.bakenode_output_settings.output_image_name or not output.bakenode_output_settings.enabled:
+			image = output.bakenode_output_settings.get_image()
+			if not image or not output.bakenode_output_settings.enabled:
 				continue
-			
-			image = bpy.data.images[output.bakenode_output_settings.output_image_name]
 			
 			base_path, file_name = create_image_file_path(self.base_path, self.prefix, image.name, self.suffix)
 			
@@ -986,11 +990,10 @@ class BH_OT_create_bakenode_output_image_name_node_dialog(Operator):
 		bake_nodegroup_output = bakenode_nodegroup.outputs[bakenode_output_index]
 		bake_nodegroup_output_settings = bake_nodegroup_output.bakenode_output_settings
 		
-		output_image_name = bake_nodegroup_output_settings.output_image_name
-		
-		if output_image_name and output_image_name in bpy.data.images:
+		bake_image = bake_nodegroup_output_settings.get_image()
+		if bake_image:
 			image_node = create_node("Image Texture", active_mat_nodes, "ShaderNodeTexImage")
-			image_node.image = bpy.data.images[output_image_name]
+			image_node.image = bake_image
 		
 		image_node.label = ""
 		set_node_relative_location(active_bakenode, image_node, vert_align="CENTER", horz_align="CENTER")
@@ -1030,11 +1033,11 @@ class BH_OT_create_bakenode_output_image_name_nodes(Operator):
 		deselect_all_nodes(active_mat_nodes)
 		
 		for output in bakenode_nodegroup.outputs:
-			output_image_name = output.bakenode_output_settings.output_image_name
+			bake_image = output.bakenode_output_settings.get_image()
 		
-			if output_image_name and output_image_name in bpy.data.images:
+			if bake_image:
 				image_node = create_node("Image Texture", active_mat_nodes, "ShaderNodeTexImage")
-				image_node.image = bpy.data.images[output_image_name]
+				image_node.image = bake_image
 			else:
 				continue
 			
@@ -1072,8 +1075,9 @@ class BH_OT_show_bakenode_output_image_name_in_editor(Operator):
 		for area in context.screen.areas:
 			if area.type == "IMAGE_EDITOR":
 				# check if output image is valid
-				if bakenode_nodegroup_output_settings.output_image_name in bpy.data.images:
-					area.spaces[0].image = bpy.data.images[bakenode_nodegroup_output_settings.output_image_name]
+				bake_image = bakenode_nodegroup_output_settings.get_image()
+				if bake_image:
+					area.spaces[0].image = bake_image
 				else:
 					area.spaces[0].image = bpy.data.images[BAKEHELPER_DEFAULT_IMAGE_NAME]
 				break
@@ -1089,9 +1093,10 @@ class BH_UL_active_bakenode_outputs_list(UIList):
 			icon = 'NONE'
 			
 			layout.prop(item.bakenode_output_settings, "enabled", text="")
-			if not item.bakenode_output_settings.output_image_name or item.bakenode_output_settings.output_image_name not in bpy.data.images:
+			bake_image = item.bakenode_output_settings.get_image()
+			if not bake_image:
 				icon = "X"
-			elif not bpy.data.images[item.bakenode_output_settings.output_image_name].filepath:
+			elif not bake_image.filepath:
 				icon = "IMPORT"
 			
 			layout.label(text=item.name, icon=icon)
@@ -1128,9 +1133,8 @@ class BH_PT_bake_helper_panel(Panel):
 		else:
 			layout.label(text="This object doesn't support UVs.")
 		
-		if BAKEHELPER_DEFAULT_IMAGE_NAME in bpy.data.images:
-			image = bpy.data.images[BAKEHELPER_DEFAULT_IMAGE_NAME]
-			
+		image = bpy.data.images.get(BAKEHELPER_DEFAULT_IMAGE_NAME, None)
+		if image:
 			layout.label(text="Bake Helper Image Settings")
 			layout.prop(image, "size")
 			layout.prop(image, "use_generated_float")
@@ -1162,8 +1166,8 @@ class BH_PT_bakenode_settings(Panel):
 		layout = self.layout
 		obj = context.active_object
 		
-		if get_master_bakenode_nodegroup():
-			bakenode_nodegroup = get_master_bakenode_nodegroup()
+		bakenode_nodegroup = get_master_bakenode_nodegroup()
+		if bakenode_nodegroup:
 			bakenode_active_output_index = context.scene.bakenode_output_active_index
 			active_bakenode_output_settings = bakenode_nodegroup.outputs[bakenode_active_output_index].bakenode_output_settings
 			
@@ -1195,7 +1199,7 @@ class BH_PT_bakenode_settings(Panel):
 			layout.operator(BH_OT_batch_set_bakenode_output_image_name_fake_user_dialog.bl_idname, text="Batch Set Output Image Fake Users")
 
 			layout.separator()
-			# 
+			
 			op_settings = layout.operator(BH_OT_batch_bake_bakenode_outputs.bl_idname, text="BakeNode Batch Bake")
 			op_settings.bake_image_autosave = context.scene.bakenode_bake_settings.bake_image_autosave
 			

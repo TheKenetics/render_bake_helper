@@ -16,15 +16,6 @@ from bpy.props import EnumProperty, IntProperty, FloatVectorProperty, BoolProper
 from bpy.types import PropertyGroup, UIList, Operator, Panel, AddonPreferences
 from .bnodelib import *
 
-"""
-TODO
-Add Master BakeNode
-	
-Add bake single bakenode output right click context menu
-Add bake active index to bakenode panel
-nodegroup pointerprop
-"""
-
 ## Globals
 # Dictionary that maps from possible special bakenode output names and the bake passes they correspond to
 OUTPUT_NAME_TO_BAKETYPE_MAP = {
@@ -1118,7 +1109,7 @@ class BH_PT_bakenode_settings(Panel):
 			layout.label(text="BakeNode Outputs")
 			# List of bakenode outputs
 			layout.template_list("BH_UL_active_bakenode_outputs_list", "", bakenode_nodegroup, "outputs", context.scene, "bakenode_output_active_index")
-			# Connect active bakenode output
+			# Bake selected bakenode output
 			orig_context = self.layout.operator_context
 			self.layout.operator_context = 'EXEC_DEFAULT'
 			operator_props = layout.operator(BH_OT_bake_single_bakenode_output_dialog.bl_idname, text="Bake Selected Output")

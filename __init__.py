@@ -723,7 +723,7 @@ class BH_OT_create_bakenode_output_image_name_dialog(Operator):
 		
 		if self.auto_name:
 			self.image_name = (
-				bakenode_nodegroup.name[:bakenode_nodegroup.name.find("BakeNode")] + "_" +
+				bakenode_nodegroup.name[:bakenode_nodegroup.name.find("BakeNode")] +
 				bakenode_nodegroup.outputs[active_output_index].name
 			)
 		image = get_image_advanced(self.image_name, width=self.width, height=self.height, color_type=self.color_type, alpha=self.alpha, float_buffer=self.float_buffer, use_fake_user=self.use_fake_user)
@@ -1099,12 +1099,12 @@ class BH_PT_bakenode_settings(Panel):
 		layout = self.layout
 		obj = context.active_object
 		
+		layout.prop(context.scene.bakenode_ui_settings, "scene_bakenode")
 		bakenode_nodegroup = get_master_bakenode_nodegroup()
 		if bakenode_nodegroup:
 			bakenode_active_output_index = context.scene.bakenode_output_active_index
 			active_bakenode_output_settings = bakenode_nodegroup.outputs[bakenode_active_output_index].bakenode_output_settings
 			
-			layout.prop(context.scene.bakenode_ui_settings, "scene_bakenode")
 			
 			layout.label(text="BakeNode Outputs")
 			# List of bakenode outputs

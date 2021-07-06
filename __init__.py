@@ -415,26 +415,16 @@ class BH_OT_prepare_bake(Operator):
 			bake_image_name = BAKEHELPER_DEFAULT_IMAGE_NAME
 			
 			# Get or create necessary nodes
-			mat_output = get_node(
-				"Material Output",
-				node_tree.nodes,
-				"ShaderNodeOutputMaterial"
-			)
-			bake_helper_node = get_node(
-				"BakeHelperNode",
-				node_tree.nodes,
-				"ShaderNodeTexImage"
-			)
+			mat_output = get_node("Material Output", node_tree.nodes, "ShaderNodeOutputMaterial")
+			bake_helper_node = get_node("BakeHelperNode", node_tree.nodes, "ShaderNodeTexImage")
 
 			# Create BakeHelper image if there is no image in the BakeHelper Image node
 			# or if reset image flag is set
-			if not bake_helper_node.image or \
-					(self.reset_bake_helper_image and bake_helper_node.image != bake_image_name):
-				
-				bake_helper_node.image = get_image(
-					bake_image_name,
-					1024
-				)
+			if (
+				(not bake_helper_node.image) or
+				(self.reset_bake_helper_image and bake_helper_node.image != bake_image_name)
+			):
+				bake_helper_node.image = get_image(bake_image_name, 1024)
 
 			# Set location
 			set_node_relative_location(mat_output, bake_helper_node, horz_align="RIGHT", vert_align="BOTTOM")
@@ -456,10 +446,7 @@ class BH_OT_connect_bakenode_output(Operator):
 	bl_options = {'REGISTER','UNDO', 'INTERNAL'}
 	
 	# Properties
-	bakenode_output_index : IntProperty(
-		name="Bake Output",
-		description="Index of node output to bake."
-	)
+	bakenode_output_index : IntProperty(name="Bake Output", description="Index of node output to bake.")
 	
 	@classmethod
 	def poll(cls, context):
@@ -544,36 +531,12 @@ class BH_OT_bake_material_results_dialog(Operator):
 		description="Bake Type to bake."
 	)
 	
-	bake_image_autosave : BoolProperty(
-		name="Autosave Bake Image",
-		default=False
-	)
-	
-	autopadding : BoolProperty(
-		name="Autopadding",
-		description="Calculate padding based on image width.",
-		default=True
-	)
-	
-	bake_samples : IntProperty(
-		name="Bake Samples",
-		default=10
-	)
-	
-	bake_image_width : IntProperty(
-		name="Bake Image Width",
-		default=1024
-	)
-	
-	bake_image_height : IntProperty(
-		name="Bake Image Height",
-		default=1024
-	)
-	
-	padding_per_128 : IntProperty(
-		name="Padding Per 128",
-		default=1
-	)
+	bake_image_autosave : BoolProperty(name="Autosave Bake Image", default=False)
+	autopadding : BoolProperty(name="Autopadding", description="Calculate padding based on image width.", default=True)
+	bake_samples : IntProperty(name="Bake Samples", default=10)
+	bake_image_width : IntProperty(name="Bake Image Width", default=1024)
+	bake_image_height : IntProperty(name="Bake Image Height", default=1024)
+	padding_per_128 : IntProperty(name="Padding Per 128", default=1)
 	
 	color_type : EnumProperty(
 		items=[
@@ -584,15 +547,8 @@ class BH_OT_bake_material_results_dialog(Operator):
 		default="sRGB"
 	)
 
-	alpha : BoolProperty(
-		name="Alpha",
-		default=False
-	)
-
-	float_buffer : BoolProperty(
-		name="32 bit Float",
-		default=False
-	)
+	alpha : BoolProperty(name="Alpha", default=False)
+	float_buffer : BoolProperty(name="32 bit Float", default=False)
 	
 	@classmethod
 	def poll(cls, context):
@@ -610,7 +566,6 @@ class BH_OT_bake_material_results_dialog(Operator):
 		active_mat_nodes = context.active_object.active_material.node_tree.nodes
 		active_node = active_mat_nodes.active
 		
-		""" """
 		# Save original settings
 		orig_render_samples = context.scene.cycles.samples
 		orig_padding = context.scene.render.bake.margin
@@ -648,7 +603,6 @@ class BH_OT_bake_material_results_dialog(Operator):
 		# Restore original settings
 		context.scene.cycles.samples = orig_render_samples
 		context.scene.render.bake.margin = orig_padding
-		""" """
 		
 		# Make BakeNode active again
 		deselect_all_nodes(active_mat_nodes)
@@ -696,18 +650,10 @@ class BH_OT_bake_single_bakenode_output_dialog(Operator):
 		return context.window_manager.invoke_props_dialog(self)
 
 	def execute(self, context):
-		#mat = context.active_object.active_material
 		bakenode_output_index = int(self.bakenode_output_index)
-		#active_mat_nodes = mat.node_tree.nodes
-		#active_bakenode = get_bakenode(mat)
 		
 		# Bake single output
 		bake_bakenode_output(self, context, bakenode_output_index)
-		
-		# Make BakeNode active again
-		#deselect_all_nodes(active_mat_nodes)
-		#active_bakenode.select = True
-		#active_mat_nodes.active = active_bakenode
 		
 		return {'FINISHED'}
 
@@ -741,9 +687,6 @@ class BH_OT_batch_bake_bakenode_outputs(Operator):
 		)
 
 	def execute(self, context):
-		# save bakenode to variable
-		#active_mat_nodes = context.active_object.active_material.node_tree.nodes
-		#active_node = context.active_object.active_material.node_tree.nodes.active
 		bakenode_nodegroup = get_master_bakenode_nodegroup()
 		
 		# Get enabled outputs
@@ -752,11 +695,6 @@ class BH_OT_batch_bake_bakenode_outputs(Operator):
 		for output_index, output in enabled_outputs:
 			print(f"Baking output: {str(output_index)}, {output}")
 			bake_bakenode_output(self, context, output_index)
-		
-		# Make BakeNode active again
-		#deselect_all_nodes(active_mat_nodes)
-		#active_node.select = True
-		#active_mat_nodes.active = active_node
 		
 		return {'FINISHED'}
 
@@ -856,56 +794,23 @@ class BH_OT_create_bakenode_output_image_name_dialog(Operator):
 	bl_options = {'REGISTER','UNDO'}
 	
 	# Properties
-	image_name : StringProperty(
-		name="Image Name",
-		default="New BakeNode Image"
-	)
-
-	file_path : StringProperty(
-		name="Image File Path",
-		default="//Textures/"
-	)
-
-	width : IntProperty(
-		name="Width",
-		default=1024
-	)
-
-	height : IntProperty(
-		name="Height",
-		default=1024
-	)
+	image_name : StringProperty(name="Image Name", default="New BakeNode Image")
+	file_path : StringProperty(name="Image File Path", default="//Textures/")
+	width : IntProperty(name="Width", default=1024)
+	height : IntProperty(name="Height", default=1024)
 
 	color_type : EnumProperty(
 		items=[
-			("sRGB","Color","","",0),
-			("Non-Color","Non-Color","","",1)
-			],
-		name="Color Type",
-		default="sRGB"
+			("sRGB","Color",""),
+			("Non-Color","Non-Color","")
+		],
+		name="Color Type"
 	)
 
-	alpha : BoolProperty(
-		name="Alpha",
-		default=False
-	)
-
-	float_buffer : BoolProperty(
-		name="32 bit Float",
-		default=False
-	)
-	
-	use_fake_user : BoolProperty(
-		name="Fake User",
-		description="Keep this image even if it has no users.",
-		default=True
-	)
-	
-	save_to_disk : BoolProperty(
-		name="Save to Disk",
-		description="Save image to disk after creation.",
-		default=False
-	)
+	alpha : BoolProperty(name="Alpha", default=False)
+	float_buffer : BoolProperty(name="32 bit Float", default=False)
+	use_fake_user : BoolProperty(name="Fake User", description="Keep this image even if it has no users.", default=True)
+	save_to_disk : BoolProperty(name="Save to Disk", description="Save image to disk after creation.", default=False)
 	
 	@classmethod
 	def poll(cls, context):
@@ -929,31 +834,11 @@ class BH_OT_batch_create_bakenode_output_image_name_dialog(Operator):
 	bl_options = {'REGISTER','UNDO'}
 	
 	# Properties
-	width : IntProperty(
-		name="Width",
-		default=1024
-	)
-
-	height : IntProperty(
-		name="Height",
-		default=1024
-	)
-	
-	alpha : BoolProperty(
-		name="Alpha",
-		default=False
-	)
-
-	float_buffer : BoolProperty(
-		name="32 bit Float",
-		default=False
-	)
-	
-	use_fake_user : BoolProperty(
-		name="Fake User",
-		description="Keep this image even if it has no users.",
-		default=True
-	)
+	width : IntProperty(name="Width", default=1024)
+	height : IntProperty(name="Height", default=1024)
+	alpha : BoolProperty(name="Alpha", default=False)
+	float_buffer : BoolProperty(name="32 bit Float", default=False)
+	use_fake_user : BoolProperty(name="Fake User", description="Keep this image even if it has no users.", default=True)
 	
 	@classmethod
 	def poll(cls, context):
@@ -988,11 +873,7 @@ class BH_OT_batch_set_bakenode_output_image_name_fake_user_dialog(Operator):
 	bl_options = {'REGISTER','UNDO'}
 	
 	# Properties
-	use_fake_user : BoolProperty(
-		name="Fake User",
-		description="Keep this image even if it has no users.",
-		default=True
-	)
+	use_fake_user : BoolProperty(name="Fake User", description="Keep this image even if it has no users.", default=True)
 	
 	@classmethod
 	def poll(cls, context):
@@ -1021,18 +902,14 @@ class BH_OT_create_bakenode_output_dialog(Operator):
 	# Properties
 	color_type  : EnumProperty(
 		items=[
-			("NodeSocketColor","Color","","",0),
-			("NodeSocketVector","Vector","","",1),
-			("NodeSocketFloat","Value","","",2),
-			],
-		name="Color Type",
-		default="NodeSocketColor"
+			("NodeSocketColor","Color",""),
+			("NodeSocketVector","Vector",""),
+			("NodeSocketFloat","Value",""),
+		],
+		name="Color Type"
 	)
 	
-	name : StringProperty(
-		name="Output Name",
-		default="Output"
-	)
+	name : StringProperty(name="Output Name", default="Output")
 	
 	@classmethod
 	def poll(cls, context):
@@ -1062,25 +939,10 @@ class BH_OT_batch_save_bakenode_outputs(Operator):
 	bl_options = {'REGISTER','UNDO','INTERNAL'}
 	
 	# Properties
-	base_path : StringProperty(
-		name="Base Path",
-		default=""
-	)
-
-	suffix : StringProperty(
-		name="Suffix",
-		default=""
-	)
-	
-	prefix : StringProperty(
-		name="Prefix",
-		default=""
-	)
-	
-	save : BoolProperty(
-		name="Save",
-		default=False
-	)
+	base_path : StringProperty(name="Base Path", default="")
+	suffix : StringProperty(name="Suffix", default="")
+	prefix : StringProperty(name="Prefix", default="")
+	save : BoolProperty(name="Save", default=False)
 	
 	@classmethod
 	def poll(cls, context):
@@ -1119,10 +981,7 @@ class BH_OT_create_bakenode_output_image_name_node_dialog(Operator):
 	bl_options = {'REGISTER','UNDO'}
 	
 	# Properties
-	bakenode_output_index : EnumProperty(
-		items=get_enum_master_bakenode_outputs,
-		name="Bake Output",
-	)
+	bakenode_output_index : EnumProperty(items=get_enum_master_bakenode_outputs, name="Bake Output")
 	
 	@classmethod
 	def poll(cls, context):
@@ -1150,11 +1009,7 @@ class BH_OT_create_bakenode_output_image_name_node_dialog(Operator):
 		output_image_name = bake_nodegroup_output_settings.output_image_name
 		
 		if output_image_name and output_image_name in bpy.data.images:
-			image_node = create_node(
-					"Image Texture",
-					active_mat_nodes,
-					"ShaderNodeTexImage"
-				)
+			image_node = create_node("Image Texture", active_mat_nodes, "ShaderNodeTexImage")
 			image_node.image = bpy.data.images[output_image_name]
 		
 		image_node.label = ""
@@ -1199,11 +1054,7 @@ class BH_OT_create_bakenode_output_image_name_nodes(Operator):
 			output_image_name = output.bakenode_output_settings.output_image_name
 		
 			if output_image_name and output_image_name in bpy.data.images:
-				image_node = create_node(
-						"Image Texture",
-						active_mat_nodes,
-						"ShaderNodeTexImage"
-					)
+				image_node = create_node("Image Texture", active_mat_nodes, "ShaderNodeTexImage")
 				image_node.image = bpy.data.images[output_image_name]
 			else:
 				continue
@@ -1227,10 +1078,7 @@ class BH_OT_show_bakenode_output_image_name_in_editor(Operator):
 	bl_options = {'REGISTER','UNDO','INTERNAL'}
 	
 	# Properties
-	bakenode_output_index : IntProperty(
-		name="Bake Output",
-		default=0
-	)
+	bakenode_output_index : IntProperty(name="Bake Output", default=0)
 	
 	@classmethod
 	def poll(cls, context):
@@ -1423,16 +1271,8 @@ class BH_addon_preferences(AddonPreferences):
 		description = "Name for Master BakeNode nodegroup to use as default",
 		default = "BakeNode"
 	)
-	
-	create_missing_bakenode : BoolProperty(
-		name="Create Missing BakeNodes",
-		default=False
-	)
-	
-	show_mini_manual : BoolProperty(
-		name="Show Mini Manual",
-		default=False
-	)
+	create_missing_bakenode : BoolProperty(name="Create Missing BakeNodes", default=False)
+	show_mini_manual : BoolProperty(name="Show Mini Manual", default=False)
 
 	def draw(self, context):
 		layout = self.layout

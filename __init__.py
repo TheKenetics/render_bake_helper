@@ -1119,11 +1119,15 @@ class BH_PT_bakenode_settings(Panel):
 			# List of bakenode outputs
 			layout.template_list("BH_UL_active_bakenode_outputs_list", "", bakenode_nodegroup, "outputs", context.scene, "bakenode_output_active_index")
 			# Connect active bakenode output
-			#orig_context = self.layout.operator_context
-			#self.layout.operator_context = 'EXEC_DEFAULT'
+			orig_context = self.layout.operator_context
+			self.layout.operator_context = 'EXEC_DEFAULT'
+			operator_props = layout.operator(BH_OT_bake_single_bakenode_output_dialog.bl_idname, text="Bake Selected Output")
+			operator_props.bakenode_output_index = str(bakenode_active_output_index)
+			operator_props.bake_image_autosave = context.scene.bakenode_bake_settings.bake_image_autosave
+			operator_props.autopadding = True
 			#layout.operator(BH_OT_connect_bakenode_output_dialog.bl_idname).bakenode_output_index = str(bakenode_active_output_index)
-			#self.layout.operator_context = orig_context
-			#layout.separator()
+			self.layout.operator_context = orig_context
+			layout.separator()
 			
 			layout.label(text="Output Settings")
 			# Change active bakenode output image

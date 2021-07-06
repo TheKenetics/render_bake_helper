@@ -656,94 +656,6 @@ class BH_OT_batch_bake_bakenode_outputs(Operator):
 		return {'FINISHED'}
 
 
-class BH_OT_create_bakenode_output_image_name(Operator):
-	"""Creates new image datablock for selected BakeNode output."""
-	bl_idname = "bake.bh_ot_create_bakenode_output_image_name"
-	bl_label = "Create BakeNode Output Image"
-	bl_options = {'REGISTER','UNDO', 'INTERNAL'}
-	
-	# Properties
-	image_name : StringProperty(
-		name="Image Name",
-		default="New BakeNode Image"
-	)
-
-	file_path : StringProperty(
-		name="Image File Path",
-		default="//Textures/"
-	)
-
-	width : IntProperty(
-		name="Width",
-		default=1024
-	)
-
-	height : IntProperty(
-		name="Height",
-		default=1024
-	)
-
-	color_type : EnumProperty(
-		items=[
-			("sRGB","Color","","",0),
-			("Non-Color","Non-Color","","",1)
-			],
-		name="Color Type",
-		default="sRGB"
-	)
-
-	alpha : BoolProperty(
-		name="Alpha",
-		default=False
-	)
-
-	float_buffer : BoolProperty(
-		name="32 bit Float",
-		default=False
-	)
-	
-	use_fake_user : BoolProperty(
-		name="Fake User",
-		description="Keep this image even if it has no users.",
-		default=True
-	)
-	
-	save_to_disk : BoolProperty(
-		name="Save to Disk",
-		description="Save image to disk after creation.",
-		default=False
-	)
-	
-	bakenode_output_index = IntProperty(
-		name="BakeNode Output Index",
-		default=0
-	)
-	
-	@classmethod
-	def poll(cls, context):
-		return get_master_bakenode_nodegroup()
-
-	def execute(self, context):
-		bakenode_nodegroup = get_master_bakenode_nodegroup()
-		active_output_index = self.bakenode_output_index
-		
-		image = get_image_advanced(self.image_name, width=self.width, height=self.height, color_type=self.color_type, alpha=self.alpha, float_buffer=self.float_buffer, use_fake_user=self.use_fake_user)
-		
-		if self.save_to_disk:
-			if self.file_path.startswith("//"):
-				self.file_path = "/".join( (os.path.dirname(os.path.realpath(bpy.data.filepath)), self.file_path[len("//"):]) )
-			
-			if not self.file_path.endswith("/"):
-				self.file_path += "/"
-			
-			image.filepath_raw = self.file_path + image.name + ".png"
-			image.save()
-		
-		bakenode_nodegroup.outputs[active_output_index].bakenode_output_settings.output_image_name = image.name
-		
-		return {'FINISHED'}
-
-
 class BH_OT_create_bakenode_output_image_name_dialog(Operator):
 	"""Creates new image datablock for selected BakeNode output."""
 	bl_idname = "bake.bh_ot_create_bakenode_output_image_name_dialog"
@@ -774,12 +686,28 @@ class BH_OT_create_bakenode_output_image_name_dialog(Operator):
 		return get_master_bakenode_nodegroup()
 		
 	def invoke(self, context, event):
+		# set index to active index when run from invoke default
+		# in exec default you set output_index yourself
+		self.bakenode_output_index = context.scene.bakenode_output_active_index
 		return context.window_manager.invoke_props_dialog(self)
 
 	def execute(self, context):
-		self.bakenode_output_index = context.scene.bakenode_output_active_index
+		bakenode_nodegroup = get_master_bakenode_nodegroup()
+		active_output_index = self.bakenode_output_index
 		
-		BH_OT_create_bakenode_output_image_name.execute(self, context)
+		image = get_image_advanced(self.image_name, width=self.width, height=self.height, color_type=self.color_type, alpha=self.alpha, float_buffer=self.float_buffer, use_fake_user=self.use_fake_user)
+		
+		if self.save_to_disk:
+			if self.file_path.startswith("//"):
+				self.file_path = "/".join( (os.path.dirname(os.path.realpath(bpy.data.filepath)), self.file_path[len("//"):]) )
+			
+			if not self.file_path.endswith("/"):
+				self.file_path += "/"
+			
+			image.filepath_raw = self.file_path + image.name + ".png"
+			image.save()
+		
+		bakenode_nodegroup.outputs[active_output_index].bakenode_output_settings.output_image_name = image.name
 		
 		return {'FINISHED'}
 
@@ -818,7 +746,7 @@ class BH_OT_batch_create_bakenode_output_image_name_dialog(Operator):
 			self.image_name = prefix + output.name
 			self.color_type = "sRGB" if output.type == "RGBA" else "Non-Color"
 			
-			BH_OT_create_bakenode_output_image_name.execute(self, context)
+			BH_OT_create_bakenode_output_image_name_dialog.execute(self, context)
 			
 		return {'FINISHED'}
 
@@ -1150,7 +1078,7 @@ class BH_PT_bakenode_settings(Panel):
 			# Connect active bakenode output
 			orig_context = self.layout.operator_context
 			self.layout.operator_context = 'EXEC_DEFAULT'
-			layout.operator(BH_OT_connect_bakenode_output_dialog.bl_idname).bakenode_output_index = bakenode_active_output_index
+			layout.operator(BH_OT_connect_bakenode_output_dialog.bl_idname).bakenode_output_index = str(bakenode_active_output_index)
 			self.layout.operator_context = orig_context
 			layout.separator()
 			
@@ -1293,7 +1221,6 @@ classes = (
 	BH_OT_connect_bakenode_output_dialog,
 	BH_OT_bake_single_bakenode_output_dialog,
 	BH_OT_batch_bake_bakenode_outputs,
-	BH_OT_create_bakenode_output_image_name,
 	BH_OT_create_bakenode_output_image_name_dialog,
 	BH_OT_batch_create_bakenode_output_image_name_dialog,
 	BH_OT_batch_set_bakenode_output_image_name_fake_user_dialog,

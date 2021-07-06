@@ -22,6 +22,7 @@ Add Master BakeNode
 	
 Add bake single bakenode output right click context menu
 Add bake active index to bakenode panel
+nodegroup pointerprop
 """
 
 ## Globals
@@ -97,28 +98,27 @@ def create_bakenode(material):
 
 def get_bakenode(material, force_create=False):
 	"""
-	Returns bakenode if it exists in material's node_tree, or returns None and warns if it doesn't exist.
+	Returns bakenode if selected master bakenode exists in material's node_tree, or returns None and warns if it doesn't exist.
 	Can also create and return a new bakenode if one doesn't exist by force_create parameter.
 	"""
-	prefs = get_addon_preferences()
-	bakenode_nodegroup_name = prefs.master_bakenode_name
-	bakenode = None
+	master_bakenode = get_master_bakenode_nodegroup()
+	mat_bakenode = None
 	
 	# Loop thru nodes in node tree
 	for node in material.node_tree.nodes:
 		# if this node is a bakenode and it's nodegroup name is the one 
-		if is_node_bakenode(node) and node.node_tree.name == bakenode_nodegroup_name:
-			bakenode = node
+		if is_node_bakenode(node) and node.node_tree.name == master_bakenode.name:
+			mat_bakenode = node
 			break
 	
 	# if we didn't find bakenode
-	if not bakenode:
+	if not mat_bakenode:
 		# print warning
 		print(f"Warning: {material.name} did not have a valid bakenode!")
 		if force_create:
-			bakenode = create_bakenode(material)
+			mat_bakenode = create_bakenode(material)
 	
-	return bakenode
+	return mat_bakenode
 
 def get_enum_master_bakenode_outputs(self, context):
 	"""Returns list of outputs of the master bakenode nodegroup as enums."""
@@ -260,7 +260,16 @@ def bake_bakenode_output(self, context, bakenode_output_index):
 def get_addon_preferences():
 	return bpy.context.preferences.addons[__package__].preferences
 
+def get_scene_preferences():
+	return bpy.context.scene.bakenode_ui_settings
+
 def get_master_bakenode_nodegroup():
+	# Scene bakenode takes precedence
+	scene_bakenode = get_scene_preferences().scene_bakenode
+	if scene_bakenode:
+		return scene_bakenode
+	
+	# If no scene bakenode selected, use master
 	prefs = get_addon_preferences()
 	return bpy.data.node_groups.get(prefs.master_bakenode_name, None)
 
@@ -335,7 +344,17 @@ class BH_bakenode_bake_settings(PropertyGroup):
 	)
 
 
+def scene_bakenode_poll(self, obj):
+	return obj.type == "SHADER" and obj.name.endswith("BakeNode")
+
 class BH_bakenode_ui_settings(PropertyGroup):
+	scene_bakenode : PointerProperty(
+		name = "Scene Bakenode",
+		description = "Bakenode to bake. if None, uses bakenode from User Preferences",
+		type = bpy.types.NodeTree,
+		poll = scene_bakenode_poll
+	)
+	
 	"""Struct to hold settings for UI tools"""
 	batch_image_name_prefix : StringProperty(
 		name="Batch Image Name Prefix",
@@ -657,6 +676,7 @@ class BH_OT_create_bakenode_output_image_name_dialog(Operator):
 	bl_options = {'REGISTER','UNDO'}
 	
 	# Properties
+	auto_name : BoolProperty(name="Auto Name", description="Automatically name image from Bakenode prefix and output name", default=True)
 	image_name : StringProperty(name="Image Name", default="New BakeNode Image")
 	file_path : StringProperty(name="Image File Path", default="//Textures/")
 	width : IntProperty(name="Width", default=1024)
@@ -675,6 +695,24 @@ class BH_OT_create_bakenode_output_image_name_dialog(Operator):
 	use_fake_user : BoolProperty(name="Fake User", description="Keep this image even if it has no users.", default=True)
 	save_to_disk : BoolProperty(name="Save to Disk", description="Save image to disk after creation.", default=False)
 	
+	def draw(self, context):
+		layout = self.layout
+		
+		layout.prop(self, "auto_name")
+		if not self.auto_name:
+			layout.prop(self, "image_name")
+		layout.prop(self, "file_path")
+		layout.label(text="Path Preview")
+		layout.label(text="".join(create_image_file_path(self.file_path, "", self.image_name, "")))
+		row = layout.row()
+		row.prop(self, "width")
+		row.prop(self, "height")
+		layout.prop(self, "color_type")
+		layout.prop(self, "alpha")
+		layout.prop(self, "float_buffer")
+		layout.prop(self, "use_fake_user")
+		layout.prop(self, "save_to_disk")
+	
 	@classmethod
 	def poll(cls, context):
 		return get_master_bakenode_nodegroup()
@@ -683,12 +721,20 @@ class BH_OT_create_bakenode_output_image_name_dialog(Operator):
 		# set index to active index when run from invoke default
 		# in exec default you set output_index yourself
 		self.bakenode_output_index = context.scene.bakenode_output_active_index
+		# Smart set options
+		bakenode_output = get_master_bakenode_nodegroup().outputs[self.bakenode_output_index]
+		self.color_type = "sRGB" if bakenode_output.type == "RGBA" else "Non-Color"
 		return context.window_manager.invoke_props_dialog(self)
 
 	def execute(self, context):
 		bakenode_nodegroup = get_master_bakenode_nodegroup()
 		active_output_index = self.bakenode_output_index
 		
+		if self.auto_name:
+			self.image_name = (
+				bakenode_nodegroup.name[:bakenode_nodegroup.name.find("BakeNode")] + "_" +
+				bakenode_nodegroup.outputs[active_output_index].name
+			)
 		image = get_image_advanced(self.image_name, width=self.width, height=self.height, color_type=self.color_type, alpha=self.alpha, float_buffer=self.float_buffer, use_fake_user=self.use_fake_user)
 		
 		if self.save_to_disk:
@@ -730,14 +776,13 @@ class BH_OT_batch_create_bakenode_output_image_name_dialog(Operator):
 		bakenode_nodegroup = get_master_bakenode_nodegroup()
 		self.save_to_disk = False
 		self.file_path = ""
-		prefix = bakenode_nodegroup.name[:bakenode_nodegroup.name.find("BakeNode")]
+		self.auto_name = True
 		
 		for i, output in enumerate(bakenode_nodegroup.outputs):
 			if not output.bakenode_output_settings.enabled:
 				continue
 			
 			self.bakenode_output_index = i
-			self.image_name = prefix + output.name
 			self.color_type = "sRGB" if output.type == "RGBA" else "Non-Color"
 			
 			BH_OT_create_bakenode_output_image_name_dialog.execute(self, context)
@@ -1068,15 +1113,17 @@ class BH_PT_bakenode_settings(Panel):
 			bakenode_active_output_index = context.scene.bakenode_output_active_index
 			active_bakenode_output_settings = bakenode_nodegroup.outputs[bakenode_active_output_index].bakenode_output_settings
 			
+			layout.prop(context.scene.bakenode_ui_settings, "scene_bakenode")
+			
 			layout.label(text="BakeNode Outputs")
 			# List of bakenode outputs
 			layout.template_list("BH_UL_active_bakenode_outputs_list", "", bakenode_nodegroup, "outputs", context.scene, "bakenode_output_active_index")
 			# Connect active bakenode output
-			orig_context = self.layout.operator_context
-			self.layout.operator_context = 'EXEC_DEFAULT'
-			layout.operator(BH_OT_connect_bakenode_output_dialog.bl_idname).bakenode_output_index = str(bakenode_active_output_index)
-			self.layout.operator_context = orig_context
-			layout.separator()
+			#orig_context = self.layout.operator_context
+			#self.layout.operator_context = 'EXEC_DEFAULT'
+			#layout.operator(BH_OT_connect_bakenode_output_dialog.bl_idname).bakenode_output_index = str(bakenode_active_output_index)
+			#self.layout.operator_context = orig_context
+			#layout.separator()
 			
 			layout.label(text="Output Settings")
 			# Change active bakenode output image

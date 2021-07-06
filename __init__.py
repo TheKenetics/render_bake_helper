@@ -423,51 +423,6 @@ class BH_OT_prepare_bake(Operator):
 		return {'FINISHED'}
 
 
-class BH_OT_connect_bakenode_output(Operator):
-	"""Connects selected objects' bakenodes to material output"""
-	bl_idname = "bake.bh_ot_connect_bakenode_output"
-	bl_label = "Connect BakeNode Output"
-	bl_options = {'REGISTER','UNDO', 'INTERNAL'}
-	
-	# Properties
-	bakenode_output_index : IntProperty(name="Bake Output", description="Index of node output to bake.")
-	
-	@classmethod
-	def poll(cls, context):
-		obj = context.active_object
-		return (
-			obj and
-			obj.active_material and
-			obj.active_material.node_tree and
-			get_master_bakenode_nodegroup() is not None
-		)
-	
-	def execute(self, context):
-		prefs = get_addon_preferences()
-		
-		mats = get_valid_mats(context.selected_objects, check_for_bakenode=True)
-		
-		for mat in mats:
-			current_bakenode = get_bakenode(mat)
-			
-			# Get nodes
-			bakenode_emission = get_node("BakeNode_Emission", mat.node_tree.nodes, "ShaderNodeEmission")
-			material_output = get_node("Material Output", mat.node_tree.nodes, "ShaderNodeOutputMaterial")
-			
-			# Position BakeNode Emission
-			set_node_relative_location(material_output, bakenode_emission, horz_align="CENTER", vert_align="TOP", vert_padding=80)
-			
-			# Hide BakeNode Emission
-			bakenode_emission.hide = True
-			
-			# connect bake output to BakeNode_Emission
-			mat.node_tree.links.new(current_bakenode.outputs[int(self.bakenode_output_index)], bakenode_emission.inputs[0])
-			# connect BakeNode_Emission to Material Output
-			mat.node_tree.links.new(bakenode_emission.outputs[0], material_output.inputs[0])
-		
-		return {'FINISHED'}
-
-
 class BH_OT_connect_bakenode_output_dialog(Operator):
 	"""Connects selected objects' bakenodes to material output"""
 	bl_idname = "bake.bh_ot_connect_bakenode_output_dialog"
@@ -495,7 +450,25 @@ class BH_OT_connect_bakenode_output_dialog(Operator):
 		return context.window_manager.invoke_props_dialog(self)
 
 	def execute(self, context):
-		BH_OT_connect_bakenode_output.execute(self, context)
+		mats = get_valid_mats(context.selected_objects, check_for_bakenode=True)
+		
+		for mat in mats:
+			current_bakenode = get_bakenode(mat)
+			
+			# Get nodes
+			bakenode_emission = get_node("BakeNode_Emission", mat.node_tree.nodes, "ShaderNodeEmission")
+			material_output = get_node("Material Output", mat.node_tree.nodes, "ShaderNodeOutputMaterial")
+			
+			# Position BakeNode Emission
+			set_node_relative_location(material_output, bakenode_emission, horz_align="CENTER", vert_align="TOP", vert_padding=80)
+			
+			# Hide BakeNode Emission
+			bakenode_emission.hide = True
+			
+			# connect bake output to BakeNode_Emission
+			mat.node_tree.links.new(current_bakenode.outputs[int(self.bakenode_output_index)], bakenode_emission.inputs[0])
+			# connect BakeNode_Emission to Material Output
+			mat.node_tree.links.new(bakenode_emission.outputs[0], material_output.inputs[0])
 		
 		return {'FINISHED'}
 
@@ -1175,8 +1148,10 @@ class BH_PT_bakenode_settings(Panel):
 			# List of bakenode outputs
 			layout.template_list("BH_UL_active_bakenode_outputs_list", "", bakenode_nodegroup, "outputs", context.scene, "bakenode_output_active_index")
 			# Connect active bakenode output
-			layout.operator(BH_OT_connect_bakenode_output.bl_idname).bakenode_output_index = bakenode_active_output_index
-			
+			orig_context = self.layout.operator_context
+			self.layout.operator_context = 'EXEC_DEFAULT'
+			layout.operator(BH_OT_connect_bakenode_output_dialog.bl_idname).bakenode_output_index = bakenode_active_output_index
+			self.layout.operator_context = orig_context
 			layout.separator()
 			
 			layout.label(text="Output Settings")
@@ -1315,7 +1290,6 @@ classes = (
 	BH_bakenode_bake_settings,
 	BH_bakenode_ui_settings,
 	BH_OT_prepare_bake,
-	BH_OT_connect_bakenode_output,
 	BH_OT_connect_bakenode_output_dialog,
 	BH_OT_bake_single_bakenode_output_dialog,
 	BH_OT_batch_bake_bakenode_outputs,

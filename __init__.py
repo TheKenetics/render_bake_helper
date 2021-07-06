@@ -38,6 +38,10 @@ BAKEHELPER_DEFAULT_IMAGE_NAME = "BakeHelper"
 
 ## Helper Functions
 
+def make_node_active(nodes, node):
+	node.select = True
+	nodes.active = node
+
 def get_image(name, size):
 	"""Gets image with name if it exists, otherwise it creates a new square one with size."""
 	if name in bpy.data.images:
@@ -410,8 +414,7 @@ class BH_OT_prepare_bake(Operator):
 			deselect_all_nodes(node_tree.nodes)
 
 			# Select BakeHelperNode
-			bake_helper_node.select = True
-			node_tree.nodes.active = bake_helper_node
+			make_node_active(node_tree.nodes, bake_helper_node)
 		
 		return {'FINISHED'}
 
@@ -583,8 +586,8 @@ class BH_OT_bake_material_results_dialog(Operator):
 		
 		# Make BakeNode active again
 		deselect_all_nodes(active_mat_nodes)
-		active_node.select = True
-		active_mat_nodes.active = active_node
+		
+		make_node_active(active_mat_nodes, active_node)
 		
 		return {'FINISHED'}
 
@@ -993,8 +996,7 @@ class BH_OT_create_bakenode_output_image_name_node_dialog(Operator):
 		set_node_relative_location(active_bakenode, image_node, vert_align="CENTER", horz_align="CENTER")
 		
 		deselect_all_nodes(active_mat_nodes)
-		image_node.select = True
-		active_mat_nodes.active = image_node
+		make_node_active(active_mat_nodes, image_node)
 		
 		return {'FINISHED'}
 
@@ -1043,7 +1045,7 @@ class BH_OT_create_bakenode_output_image_name_nodes(Operator):
 			
 			last_node = image_node
 		
-		active_mat_nodes.active = image_node
+		make_node_active(active_mat_nodes, image_node)
 		
 		return {'FINISHED'}
 

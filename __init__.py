@@ -128,7 +128,7 @@ def is_node_bakenode(node):
 	"""Checks if node is a valid nodegroup and ends with BakeNode"""
 	return node.bl_idname == "ShaderNodeGroup" and node.node_tree and node.node_tree.name.endswith("BakeNode")
 
-def create_image_file_path(base_path, prefix, name, suffix):
+def create_image_file_path(base_path, name):
 	# If path is relative
 	if base_path.startswith("//"):
 		base_path = "/".join( (os.path.dirname(os.path.realpath(bpy.data.filepath)), base_path[len("//"):]) )
@@ -137,7 +137,7 @@ def create_image_file_path(base_path, prefix, name, suffix):
 	if not base_path.endswith("/"):
 		base_path += "/"
 	
-	return base_path, f"{prefix}{name}{suffix}.png"
+	return base_path, f"{name}.png"
 
 def calc_padding(padding_per_128, image_width_px):
 	"""Calculates padding using padding per multiple of 128 and image width, and returns it as rounded int."""
@@ -339,24 +339,12 @@ def scene_bakenode_poll(self, obj):
 	return obj.type == "SHADER" and obj.name.endswith("BakeNode")
 
 class BH_bakenode_ui_settings(PropertyGroup):
+	"""Struct to hold settings for UI tools"""
 	scene_bakenode : PointerProperty(
 		name = "Scene Bakenode",
 		description = "Bakenode to bake. if None, uses bakenode from User Preferences",
 		type = bpy.types.NodeTree,
 		poll = scene_bakenode_poll
-	)
-	
-	"""Struct to hold settings for UI tools"""
-	batch_image_name_prefix : StringProperty(
-		name="Batch Image Name Prefix",
-		description="Prefix to apply to image names.",
-		default=""
-	)
-	
-	batch_image_name_suffix : StringProperty(
-		name="Batch Image Name Suffix",
-		description="Suffix to apply to image names.",
-		default=""
 	)
 	
 	batch_image_base_path : StringProperty(
@@ -694,7 +682,7 @@ class BH_OT_create_bakenode_output_image_name_dialog(Operator):
 			layout.prop(self, "image_name")
 		layout.prop(self, "file_path")
 		layout.label(text="Path Preview")
-		layout.label(text="".join(create_image_file_path(self.file_path, "", self.image_name, "")))
+		layout.label(text="".join(create_image_file_path(self.file_path, self.image_name)))
 		row = layout.row()
 		row.prop(self, "width")
 		row.prop(self, "height")
@@ -856,8 +844,6 @@ class BH_OT_batch_save_bakenode_outputs(Operator):
 	
 	# Properties
 	base_path : StringProperty(name="Base Path", default="")
-	suffix : StringProperty(name="Suffix", default="")
-	prefix : StringProperty(name="Prefix", default="")
 	save : BoolProperty(name="Save", default=False)
 	
 	@classmethod
@@ -872,7 +858,7 @@ class BH_OT_batch_save_bakenode_outputs(Operator):
 			if not image or not output.bakenode_output_settings.enabled:
 				continue
 			
-			base_path, file_name = create_image_file_path(self.base_path, self.prefix, image.name, self.suffix)
+			base_path, file_name = create_image_file_path(self.base_path, image.name)
 			
 			print("path in batch save", base_path)
 			
@@ -1151,21 +1137,15 @@ class BH_PT_bakenode_settings(Panel):
 			layout.label(text="Batch Path Change")
 			base_path, file_name = create_image_file_path(
 				context.scene.bakenode_ui_settings.batch_image_base_path,
-				context.scene.bakenode_ui_settings.batch_image_name_prefix,
-				"NAME",
-				context.scene.bakenode_ui_settings.batch_image_name_suffix
+				"NAME"
 			)
 			layout.label(text=base_path+file_name)
 			
 			layout.prop(context.scene.bakenode_ui_settings, "batch_image_base_path", text="Base Path")
-			layout.prop(context.scene.bakenode_ui_settings, "batch_image_name_prefix", text="Prefix")
-			layout.prop(context.scene.bakenode_ui_settings, "batch_image_name_suffix", text="Suffix")
 			layout.prop(context.scene.bakenode_ui_settings, "batch_image_save", text="Batch Save")
 			
 			op_settings = layout.operator(BH_OT_batch_save_bakenode_outputs.bl_idname)
 			op_settings.base_path = context.scene.bakenode_ui_settings.batch_image_base_path
-			op_settings.suffix = context.scene.bakenode_ui_settings.batch_image_name_prefix
-			op_settings.prefix = context.scene.bakenode_ui_settings.batch_image_name_suffix
 			op_settings.save = context.scene.bakenode_ui_settings.batch_image_save
 			
 		else:

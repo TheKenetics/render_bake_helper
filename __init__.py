@@ -202,7 +202,7 @@ def bake_bakenode_output(self, context, bakenode_output_index):
 	bpy.ops.render.bh_ot_prepare_bake()
 	
 	# Switch active BakeHelper image to output bake image, or use BakeHelper image if no image
-	bake_image = bakenode_output_settings.get_image()
+	bake_image = bakenode_output_settings.output_image
 	if not bake_image:
 		bake_image = bpy.data.images[BAKEHELPER_DEFAULT_IMAGE_NAME]
 	
@@ -269,7 +269,7 @@ def get_master_bakenode_nodegroup():
 class BH_bakenode_output_settings(PropertyGroup):
 	"""Struct to hold bake settings for individual outputs"""
 	enabled : BoolProperty(name="Enabled", default=False)
-	output_image_name : StringProperty(name="BakeNode Output Image", default="")
+	output_image : PointerProperty(name="BakeNode Output Image", type=bpy.types.Image)
 	samples : IntProperty(name="Samples", default=10)
 	
 	normal_swizzle_r : EnumProperty(
@@ -324,12 +324,6 @@ class BH_bakenode_output_settings(PropertyGroup):
 		description="Padding to add per multiple of 128. EG: 1p for 128px, 2px for 256px...",
 		default=1.0
 	)
-	
-	def get_image(self):
-		if self.output_image_name:
-			return bpy.data.images.get(self.output_image_name, None)
-		else:
-			return None
 
 
 class BH_bakenode_bake_settings(PropertyGroup):
@@ -707,7 +701,7 @@ class BH_OT_create_bakenode_output_image_name_dialog(Operator):
 			image.filepath_raw = self.file_path + image.name + ".png"
 			image.save()
 		
-		bakenode_nodegroup.outputs[active_output_index].bakenode_output_settings.output_image_name = image.name
+		bakenode_nodegroup.outputs[active_output_index].bakenode_output_settings.output_image = image
 		
 		return {'FINISHED'}
 
@@ -772,7 +766,7 @@ class BH_OT_batch_set_bakenode_output_image_name_fake_user_dialog(Operator):
 		
 		for output in bakenode_nodegroup.outputs:
 			if output.bakenode_output_settings.enabled:
-				bake_image = output.bakenode_output_settings.get_image()
+				bake_image = output.bakenode_output_settings.output_image
 				if bake_image:
 					bake_image.use_fake_user = self.use_fake_user
 		
@@ -838,7 +832,7 @@ class BH_OT_batch_save_bakenode_outputs(Operator):
 		bakenode_nodegroup = get_master_bakenode_nodegroup()
 		
 		for output in bakenode_nodegroup.outputs:
-			image = output.bakenode_output_settings.get_image()
+			image = output.bakenode_output_settings.output_image
 			if not image or not output.bakenode_output_settings.enabled:
 				continue
 			
@@ -891,7 +885,7 @@ class BH_OT_create_bakenode_output_image_name_node_dialog(Operator):
 		bake_nodegroup_output = bakenode_nodegroup.outputs[bakenode_output_index]
 		bake_nodegroup_output_settings = bake_nodegroup_output.bakenode_output_settings
 		
-		bake_image = bake_nodegroup_output_settings.get_image()
+		bake_image = bake_nodegroup_output_settings.output_image
 		if bake_image:
 			image_node = create_node("Image Texture", active_mat_nodes, "ShaderNodeTexImage")
 			image_node.image = bake_image
@@ -934,7 +928,7 @@ class BH_OT_create_bakenode_output_image_name_nodes(Operator):
 		deselect_all_nodes(active_mat_nodes)
 		
 		for output in bakenode_nodegroup.outputs:
-			bake_image = output.bakenode_output_settings.get_image()
+			bake_image = output.bakenode_output_settings.output_image
 		
 			if bake_image:
 				image_node = create_node("Image Texture", active_mat_nodes, "ShaderNodeTexImage")
@@ -976,7 +970,7 @@ class BH_OT_show_bakenode_output_image_name_in_editor(Operator):
 		for area in context.screen.areas:
 			if area.type == "IMAGE_EDITOR":
 				# check if output image is valid
-				bake_image = bakenode_nodegroup_output_settings.get_image()
+				bake_image = bakenode_nodegroup_output_settings.output_image
 				if bake_image:
 					area.spaces[0].image = bake_image
 				else:
@@ -994,9 +988,11 @@ class BH_UL_active_bakenode_outputs_list(UIList):
 			icon = 'NONE'
 			
 			layout.prop(item.bakenode_output_settings, "enabled", text="")
-			bake_image = item.bakenode_output_settings.get_image()
+			bake_image = item.bakenode_output_settings.output_image
+			# If bake image doesn't exist
 			if not bake_image:
 				icon = "X"
+			# If bake image doesn't have a filepath
 			elif not bake_image.filepath:
 				icon = "IMPORT"
 			
@@ -1084,9 +1080,9 @@ class BH_PT_bakenode_settings(Panel):
 			
 			layout.label(text="Output Settings")
 			# Change active bakenode output image
-			layout.prop_search(active_bakenode_output_settings, "output_image_name", bpy.data, "images")
+			layout.prop(active_bakenode_output_settings, "output_image")
 			
-			if not active_bakenode_output_settings.output_image_name:
+			if not active_bakenode_output_settings.output_image:
 				# Create new image for active bakenode output
 				layout.operator(BH_OT_create_bakenode_output_image_name_dialog.bl_idname, text="New Image...")
 			else:

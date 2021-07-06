@@ -14,7 +14,7 @@ bl_info = {
 import bpy, os
 from bpy.props import EnumProperty, IntProperty, FloatVectorProperty, BoolProperty, FloatProperty, StringProperty, PointerProperty
 from bpy.types import PropertyGroup, UIList, Operator, Panel, AddonPreferences
-from render_bake_helper.bnodelib import *
+from .bnodelib import *
 
 """
 TODO
@@ -116,17 +116,6 @@ def get_bakenode(material, force_create=False):
 			bakenode = create_bakenode(material)
 	
 	return bakenode
-
-def get_enum_bake_outputs(self, context):
-	"""Returns list of outputs of the active node as enums."""
-	enum_list = []
-	
-	bake_output_names = [output.name for output in context.active_object.active_material.node_tree.nodes.active.outputs]
-	
-	for index, output_name in enumerate(bake_output_names):
-		enum_list.append( (str(index), output_name, "", "", index) )
-	
-	return enum_list
 
 def get_enum_master_bakenode_outputs(self, context):
 	"""Returns list of outputs of the master bakenode nodegroup as enums."""
@@ -277,42 +266,30 @@ def get_master_bakenode_nodegroup():
 
 class BH_bakenode_output_settings(PropertyGroup):
 	"""Struct to hold bake settings for individual outputs"""
-	enabled : BoolProperty(
-		name="Enabled",
-		default=False
-	)
-	
-	output_image_name : StringProperty(
-		name="BakeNode Output Image",
-		default=""
-	)
-
-	samples : IntProperty(
-		name="Samples",
-		default=10
-	)
+	enabled : BoolProperty(name="Enabled", default=False)
+	output_image_name : StringProperty(name="BakeNode Output Image", default="")
+	samples : IntProperty(name="Samples", default=10)
 	
 	normal_swizzle_r : EnumProperty(
 		items=[
-			("POS_X","+X","","",0),
-			("POS_Y","+Y","","",1),
-			("POS_Z","+Z","","",2),
-			("NEG_X","-X","","",3),
-			("NEG_Y","-Y","","",4),
-			("NEG_Z","-Z","","",5)
+			("POS_X","+X",""),
+			("POS_Y","+Y",""),
+			("POS_Z","+Z",""),
+			("NEG_X","-X",""),
+			("NEG_Y","-Y",""),
+			("NEG_Z","-Z","")
 			],
-		name="Swizzle",
-		default="POS_X"
+		name="Swizzle"
 	)
 	
 	normal_swizzle_g : EnumProperty(
 		items=[
-			("POS_X","+X","","",0),
-			("POS_Y","+Y","","",1),
-			("POS_Z","+Z","","",2),
-			("NEG_X","-X","","",3),
-			("NEG_Y","-Y","","",4),
-			("NEG_Z","-Z","","",5)
+			("POS_X","+X",""),
+			("POS_Y","+Y",""),
+			("POS_Z","+Z",""),
+			("NEG_X","-X",""),
+			("NEG_Y","-Y",""),
+			("NEG_Z","-Z","")
 			],
 		name="Swizzle",
 		default="POS_Y"
@@ -320,12 +297,12 @@ class BH_bakenode_output_settings(PropertyGroup):
 	
 	normal_swizzle_b : EnumProperty(
 		items=[
-			("POS_X","+X","","",0),
-			("POS_Y","+Y","","",1),
-			("POS_Z","+Z","","",2),
-			("NEG_X","-X","","",3),
-			("NEG_Y","-Y","","",4),
-			("NEG_Z","-Z","","",5)
+			("POS_X","+X",""),
+			("POS_Y","+Y",""),
+			("POS_Z","+Z",""),
+			("NEG_X","-X",""),
+			("NEG_Y","-Y",""),
+			("NEG_Z","-Z","")
 			],
 		name="Swizzle",
 		default="POS_Z"
@@ -333,9 +310,9 @@ class BH_bakenode_output_settings(PropertyGroup):
 	
 	normal_space : EnumProperty(
 		items=[
-			("OBJECT","Object","","",0),
-			("TANGENT","Tangent","","",1)
-			],
+			("OBJECT","Object",""),
+			("TANGENT","Tangent","")
+		],
 		name="Normal Space",
 		default="TANGENT"
 	)

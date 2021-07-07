@@ -1100,27 +1100,34 @@ class BH_PT_bakenode_settings(Panel):
 			# Bake selected bakenode output
 			orig_context = self.layout.operator_context
 			self.layout.operator_context = 'EXEC_DEFAULT'
-			operator_props = layout.operator(BH_OT_bake_single_bakenode_output_dialog.bl_idname, text="Bake Selected Output")
+			row = layout.row(align=True)
+			operator_props = row.operator(BH_OT_bake_single_bakenode_output_dialog.bl_idname, text="Bake Active Output")
 			operator_props.bakenode_output_index = str(bakenode_active_output_index)
 			operator_props.bake_image_autosave = context.scene.bakenode_bake_settings.bake_image_autosave
 			operator_props.autopadding = True
 			#layout.operator(BH_OT_connect_bakenode_output_dialog.bl_idname).bakenode_output_index = str(bakenode_active_output_index)
 			self.layout.operator_context = orig_context
+			
+			op_settings = row.operator(BH_OT_batch_bake_bakenode_outputs.bl_idname, text="Batch Bake")
+			op_settings.bake_image_autosave = context.scene.bakenode_bake_settings.bake_image_autosave
+			
 			layout.separator()
 			
 			layout.label(text="Output Settings")
 			# Change active bakenode output image
-			layout.prop(active_bakenode_output_settings, "output_image")
+			row = layout.split(factor=0.9, align=True)
+			row.prop(active_bakenode_output_settings, "output_image", text="")
 			
 			if not active_bakenode_output_settings.output_image:
 				# Create new image for active bakenode output
-				layout.operator(BH_OT_create_bakenode_output_image_name_dialog.bl_idname, text="New Image...")
+				row.operator(BH_OT_create_bakenode_output_image_name_dialog.bl_idname, icon="ADD", text="")
 			else:
 				# Show active bakenode output picture in image editor
-				layout.operator(BH_OT_show_bakenode_output_image_name_in_editor.bl_idname).bakenode_output_index = bakenode_active_output_index
+				row.operator(BH_OT_show_bakenode_output_image_name_in_editor.bl_idname, icon="WORKSPACE", text="").bakenode_output_index = bakenode_active_output_index
 			# Active bakenode output settings
-			layout.prop(active_bakenode_output_settings, "samples")
-			layout.prop(active_bakenode_output_settings, "padding_per_128")
+			row = layout.row()
+			row.prop(active_bakenode_output_settings, "samples")
+			row.prop(active_bakenode_output_settings, "padding_per_128")
 
 			layout.separator()
 			# Batch operators
@@ -1129,8 +1136,7 @@ class BH_PT_bakenode_settings(Panel):
 
 			layout.separator()
 			
-			op_settings = layout.operator(BH_OT_batch_bake_bakenode_outputs.bl_idname, text="BakeNode Batch Bake")
-			op_settings.bake_image_autosave = context.scene.bakenode_bake_settings.bake_image_autosave
+
 			
 			layout.prop(context.scene.bakenode_bake_settings, "bake_image_autosave")
 			

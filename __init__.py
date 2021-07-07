@@ -350,7 +350,9 @@ class BH_bakenode_ui_settings(PropertyGroup):
 	batch_image_base_path : StringProperty(
 		name="Batch Image Base Path",
 		description="Base Path to apply to images.",
-		default=""
+		default="",
+		subtype="FILE_PATH"
+		#subtype="DIR_PATH"
 	)
 	
 	batch_image_save : BoolProperty(
@@ -836,10 +838,10 @@ class BH_OT_create_bakenode_output_dialog(Operator):
 		return {'FINISHED'}
 
 
-class BH_OT_batch_save_bakenode_outputs(Operator):
-	"""Saves BakeNode outputs."""
-	bl_idname = "bake.bh_ot_batch_save_bakenode_outputs"
-	bl_label = "Batch Save BakeNode Output Images"
+class BH_OT_batch_change_bakenode_filepaths(Operator):
+	"""Changes BakeNode image filepaths, and saves images if enabled."""
+	bl_idname = "bake.bh_ot_batch_change_bakenode_filepaths"
+	bl_label = "Batch Change BakeNode Filepaths"
 	bl_options = {'REGISTER','UNDO','INTERNAL'}
 	
 	# Properties
@@ -1144,7 +1146,7 @@ class BH_PT_bakenode_settings(Panel):
 			layout.prop(context.scene.bakenode_ui_settings, "batch_image_base_path", text="Base Path")
 			layout.prop(context.scene.bakenode_ui_settings, "batch_image_save", text="Batch Save")
 			
-			op_settings = layout.operator(BH_OT_batch_save_bakenode_outputs.bl_idname)
+			op_settings = layout.operator(BH_OT_batch_change_bakenode_filepaths.bl_idname)
 			op_settings.base_path = context.scene.bakenode_ui_settings.batch_image_base_path
 			op_settings.save = context.scene.bakenode_ui_settings.batch_image_save
 			
@@ -1243,7 +1245,7 @@ classes = (
 	BH_OT_batch_create_bakenode_output_image_name_dialog,
 	BH_OT_batch_set_bakenode_output_image_name_fake_user_dialog,
 	BH_OT_create_bakenode_output_dialog,
-	BH_OT_batch_save_bakenode_outputs,
+	BH_OT_batch_change_bakenode_filepaths,
 	BH_OT_create_bakenode_output_image_name_node_dialog,
 	BH_OT_create_bakenode_output_image_name_nodes,
 	BH_OT_show_bakenode_output_image_name_in_editor,

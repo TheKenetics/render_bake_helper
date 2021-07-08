@@ -1,8 +1,7 @@
-
 bl_info = {
 	"name": "Bake Helper",
 	"author": "Kenetics",
-	"version": (0, 6),
+	"version": (1, 0),
 	"blender": (2, 80, 0),
 	"location": "Properties > Render Tab > Bake Helper Section",
 	"description": "Sets up object's materials for baking",
@@ -139,6 +138,15 @@ def create_image_file_path(base_path, name):
 	
 	return base_path, f"{name}.png"
 
+def set_image_filepath(image, filepath, create_paths=True):
+	"""Sets image filepath and creates it if necessary."""
+	filepath, filename = create_image_file_path(filepath, image.name)
+	if create_paths:
+		if not os.path.exists(filepath):
+			os.makedirs(filepath)
+	
+	image.filepath_raw = filepath + filename
+
 def calc_padding(padding_per_128, image_width_px):
 	"""Calculates padding using padding per multiple of 128 and image width, and returns it as rounded int."""
 	return round(padding_per_128 * (image_width_px / 128))
@@ -180,14 +188,15 @@ def get_valid_mats(objects, check_for_bakenode=False):
 	return mats
 
 def bake_bakenode_output(self, context, bakenode_output_index):
+	scene = context.scene
 	bakenode_nodegroup = get_master_bakenode_nodegroup()
 	
 	bakenode_nodegroup_output = bakenode_nodegroup.outputs[bakenode_output_index]
 	bakenode_output_settings = bakenode_nodegroup_output.bakenode_output_settings
 	
 	# Save original settings
-	orig_render_samples = context.scene.cycles.samples
-	orig_padding = context.scene.render.bake.margin
+	orig_render_samples = scene.cycles.samples
+	orig_padding = scene.render.bake.margin
 	
 	# Set BakeHelper node as active
 	bpy.ops.render.bh_ot_prepare_bake()
@@ -223,12 +232,12 @@ def bake_bakenode_output(self, context, bakenode_output_index):
 		bakehelper_node.image = bake_image
 	
 	# Use samples from bakenode output
-	context.scene.cycles.samples = bakenode_output_settings.samples
+	scene.cycles.samples = bakenode_output_settings.samples
 	
 	# Calc padding
 	if self.autopadding:
 		image_width = bake_image.size[0]
-		context.scene.render.bake.margin = calc_padding(bakenode_output_settings.padding_per_128, image_width)
+		scene.render.bake.margin = calc_padding(bakenode_output_settings.padding_per_128, image_width)
 	
 	# Do other special bakes based on output name, like NormalBAKE or AOBAKE
 	# Bake emission if name isn't special
@@ -237,7 +246,6 @@ def bake_bakenode_output(self, context, bakenode_output_index):
 	)
 	
 	# Save image if autosave is on
-	#if context.scene.bakenode_bake_settings.bake_image_autosave:
 	if self.bake_image_autosave:
 		if not bake_image.filepath:
 			print(f"Image {bake_image.name} not saved because no filepath!")
@@ -245,14 +253,17 @@ def bake_bakenode_output(self, context, bakenode_output_index):
 			bake_image.save()
 	
 	# Restore original settings
-	context.scene.cycles.samples = orig_render_samples
-	context.scene.render.bake.margin = orig_padding
+	scene.cycles.samples = orig_render_samples
+	scene.render.bake.margin = orig_padding
 
 def get_addon_preferences():
 	return bpy.context.preferences.addons[__package__].preferences
 
-def get_scene_preferences():
-	return bpy.context.scene.bakenode_ui_settings
+def get_scene_preferences(context=None):
+	if context:
+		return context.scene.bakenode_scene_settings
+	else:
+		return bpy.context.scene.bakenode_scene_settings
 
 def get_master_bakenode_nodegroup():
 	# Scene bakenode takes precedence
@@ -326,20 +337,17 @@ class BH_bakenode_output_settings(PropertyGroup):
 	)
 
 
-class BH_bakenode_bake_settings(PropertyGroup):
-	"""Struct to hold settings for baking with bakenodes"""
-	bake_image_autosave : BoolProperty(
-		name="Bake Image Autosave",
-		description="Automatically saves image after each bake in Batch Bake",
-		default=False
-	)
-
-
 def scene_bakenode_poll(self, obj):
 	return obj.type == "SHADER" and obj.name.endswith("BakeNode")
 
-class BH_bakenode_ui_settings(PropertyGroup):
-	"""Struct to hold settings for UI tools"""
+class BH_bakenode_scene_settings(PropertyGroup):
+	"""Struct to hold scene settings"""
+	bakenode_active_output_index : IntProperty(
+		name = "Active Bakenode Output Index",
+		min = 0,
+		default = 0
+	)
+	
 	scene_bakenode : PointerProperty(
 		name = "Scene Bakenode",
 		description = "Bakenode to bake. if None, uses bakenode from User Preferences",
@@ -365,6 +373,12 @@ class BH_bakenode_ui_settings(PropertyGroup):
 		name="Batch Bake Autopadding",
 		description="If enabled, will calculate padding using image size.",
 		default=True
+	)
+	
+	bake_image_autosave : BoolProperty(
+		name="Bake Image Autosave",
+		description="Automatically saves image after each bake in Batch Bake",
+		default=False
 	)
 
 ## Operators
@@ -514,12 +528,13 @@ class BH_OT_bake_material_results_dialog(Operator):
 		return context.window_manager.invoke_props_dialog(self)
 
 	def execute(self, context):
+		scene = context.scene
 		active_mat_nodes = context.active_object.active_material.node_tree.nodes
 		active_node = active_mat_nodes.active
 		
 		# Save original settings
-		orig_render_samples = context.scene.cycles.samples
-		orig_padding = context.scene.render.bake.margin
+		orig_render_samples = scene.cycles.samples
+		orig_padding = scene.render.bake.margin
 		
 		# Set BakeHelper node as active
 		bpy.ops.render.bh_ot_prepare_bake()
@@ -541,19 +556,19 @@ class BH_OT_bake_material_results_dialog(Operator):
 			bakehelper_node.image = bake_image
 		
 		# Use samples from bakenode output
-		context.scene.cycles.samples = self.bake_samples
+		scene.cycles.samples = self.bake_samples
 		
 		# Calc padding
 		if self.autopadding:
-			context.scene.render.bake.margin = calc_padding(self.padding_per_128, self.bake_image_width)
+			scene.render.bake.margin = calc_padding(self.padding_per_128, self.bake_image_width)
 		
 		# Do other special bakes based on output name, like NormalBAKE or AOBAKE
 		# Bake emission if name isn't special
 		bpy.ops.object.bake(type="EMIT")
 		
 		# Restore original settings
-		context.scene.cycles.samples = orig_render_samples
-		context.scene.render.bake.margin = orig_padding
+		scene.cycles.samples = orig_render_samples
+		scene.render.bake.margin = orig_padding
 		
 		# Make BakeNode active again
 		deselect_all_nodes(active_mat_nodes)
@@ -657,6 +672,7 @@ class BH_OT_create_bakenode_output_image_name_dialog(Operator):
 	bl_options = {'REGISTER','UNDO'}
 	
 	# Properties
+	bakenode_output_index : IntProperty(name="Bakenode Output Index", min=0, options={"HIDDEN"})
 	auto_name : BoolProperty(name="Auto Name", description="Automatically name image from Bakenode prefix and output name", default=True)
 	image_name : StringProperty(name="Image Name", default="New BakeNode Image")
 	file_path : StringProperty(name="Image File Path", default="//Textures/")
@@ -701,7 +717,8 @@ class BH_OT_create_bakenode_output_image_name_dialog(Operator):
 	def invoke(self, context, event):
 		# set index to active index when run from invoke default
 		# in exec default you set output_index yourself
-		self.bakenode_output_index = context.scene.bakenode_output_active_index
+		#bakenode_scene_prefs = get_scene_preferences(context)
+		#self.bakenode_output_index = bakenode_scene_prefs.bakenode_active_output_index
 		# Smart set options
 		bakenode_output = get_master_bakenode_nodegroup().outputs[self.bakenode_output_index]
 		self.color_type = "sRGB" if bakenode_output.type == "RGBA" else "Non-Color"
@@ -718,14 +735,19 @@ class BH_OT_create_bakenode_output_image_name_dialog(Operator):
 			)
 		image = get_image_advanced(self.image_name, width=self.width, height=self.height, color_type=self.color_type, alpha=self.alpha, float_buffer=self.float_buffer, use_fake_user=self.use_fake_user)
 		
+		#if self.file_path.startswith("//"):
+		#	self.file_path = "/".join( (os.path.dirname(os.path.realpath(bpy.data.filepath)), self.file_path[len("//"):]) )
+		
+		set_image_filepath(image, self.file_path, True)
+		
+		#if not self.file_path.endswith("/"):
+		#	self.file_path += "/"
+		
+		#image.filepath_raw = self.file_path + image.name + ".png"
+		#if self.file_path.startswith("//"):
+		#	image.filepath = image.filepath_raw
+		
 		if self.save_to_disk:
-			if self.file_path.startswith("//"):
-				self.file_path = "/".join( (os.path.dirname(os.path.realpath(bpy.data.filepath)), self.file_path[len("//"):]) )
-			
-			if not self.file_path.endswith("/"):
-				self.file_path += "/"
-			
-			image.filepath_raw = self.file_path + image.name + ".png"
 			image.save()
 		
 		bakenode_nodegroup.outputs[active_output_index].bakenode_output_settings.output_image = image
@@ -860,16 +882,7 @@ class BH_OT_batch_change_bakenode_filepaths(Operator):
 			if not image or not output.bakenode_output_settings.enabled:
 				continue
 			
-			base_path, file_name = create_image_file_path(self.base_path, image.name)
-			
-			print("path in batch save", base_path)
-			
-			if not os.path.exists(base_path):
-				os.makedirs(base_path)
-			
-			image.filepath_raw = base_path + file_name
-			
-			print("path in batch save", image.filepath_raw)
+			set_image_filepath(image, self.base_path, True)
 			
 			if self.save:
 				image.save()
@@ -1003,6 +1016,32 @@ class BH_OT_show_bakenode_output_image_name_in_editor(Operator):
 		
 		return {'FINISHED'}
 
+
+class BH_OT_save_bakenode_output_image(Operator):
+	"""Saves bakenode output image."""
+	bl_idname = "bake.bh_ot_save_bakenode_output_image"
+	bl_label = "Save Bakenode Output Image"
+	bl_options = {'REGISTER','UNDO','INTERNAL'}
+	
+	# Properties
+	bakenode_output_index : IntProperty(name="Bakenode Output Index", default=0)
+	
+	@classmethod
+	def poll(cls, context):
+		return get_master_bakenode_nodegroup()
+
+	def execute(self, context):
+		bakenode_nodegroup = get_master_bakenode_nodegroup()
+		bakenode_nodegroup_output = bakenode_nodegroup.outputs[self.bakenode_output_index]
+		bakenode_nodegroup_output_settings = bakenode_nodegroup_output.bakenode_output_settings
+		bake_image = bakenode_nodegroup_output_settings.output_image
+		
+		# check if output image is valid
+		if bake_image:
+			bake_image.save()
+		
+		return {'FINISHED'}
+
 ## UI
 
 class BH_UL_active_bakenode_outputs_list(UIList):
@@ -1016,11 +1055,22 @@ class BH_UL_active_bakenode_outputs_list(UIList):
 			# If bake image doesn't exist
 			if not bake_image:
 				icon = "X"
+				layout.label(text=item.name, icon=icon)
+				op_settings = layout.operator(BH_OT_create_bakenode_output_image_name_dialog.bl_idname, icon="ADD", text="")
+				op_settings.bakenode_output_index = index
 			# If bake image doesn't have a filepath
-			elif not bake_image.filepath:
+			elif not (bake_image.filepath or bake_image.filepath_raw):
 				icon = "IMPORT"
-			
-			layout.label(text=item.name, icon=icon)
+				layout.label(text=item.name, icon=icon)
+				op_settings = layout.operator(BH_OT_show_bakenode_output_image_name_in_editor.bl_idname, icon="WORKSPACE", text="")
+				op_settings.bakenode_output_index = index
+			else:
+				layout.label(text=item.name, icon=icon)
+				if bake_image.is_dirty:
+					op_settings = layout.operator(BH_OT_save_bakenode_output_image.bl_idname, icon="FILE_TICK", text="")
+					op_settings.bakenode_output_index = index
+				op_settings = layout.operator(BH_OT_show_bakenode_output_image_name_in_editor.bl_idname, icon="WORKSPACE", text="")
+				op_settings.bakenode_output_index = index
 			
 		elif self.layout_type == "GRID":
 			layout.alignment = "CENTER"
@@ -1085,33 +1135,33 @@ class BH_PT_bakenode_settings(Panel):
 
 	def draw(self, context):
 		layout = self.layout
-		obj = context.active_object
+		bakenode_scene_settings = get_scene_preferences(context)
 		
-		layout.prop(context.scene.bakenode_ui_settings, "scene_bakenode")
+		layout.prop(bakenode_scene_settings, "scene_bakenode")
 		bakenode_nodegroup = get_master_bakenode_nodegroup()
 		if bakenode_nodegroup:
-			bakenode_active_output_index = context.scene.bakenode_output_active_index
+			bakenode_scene_prefs = get_scene_preferences(context)
+			bakenode_active_output_index = bakenode_scene_prefs.bakenode_active_output_index
 			active_bakenode_output_settings = bakenode_nodegroup.outputs[bakenode_active_output_index].bakenode_output_settings
-			
 			
 			layout.label(text="BakeNode Outputs")
 			# List of bakenode outputs
-			layout.template_list("BH_UL_active_bakenode_outputs_list", "", bakenode_nodegroup, "outputs", context.scene, "bakenode_output_active_index")
+			layout.template_list("BH_UL_active_bakenode_outputs_list", "", bakenode_nodegroup, "outputs", bakenode_scene_prefs, "bakenode_active_output_index")
+			
 			# Bake selected bakenode output
 			orig_context = self.layout.operator_context
 			self.layout.operator_context = 'EXEC_DEFAULT'
+			
 			row = layout.row(align=True)
 			operator_props = row.operator(BH_OT_bake_single_bakenode_output_dialog.bl_idname, text="Bake Active Output")
 			operator_props.bakenode_output_index = str(bakenode_active_output_index)
-			operator_props.bake_image_autosave = context.scene.bakenode_bake_settings.bake_image_autosave
+			operator_props.bake_image_autosave = bakenode_scene_settings.bake_image_autosave
 			operator_props.autopadding = True
-			#layout.operator(BH_OT_connect_bakenode_output_dialog.bl_idname).bakenode_output_index = str(bakenode_active_output_index)
+			
 			self.layout.operator_context = orig_context
 			
 			op_settings = row.operator(BH_OT_batch_bake_bakenode_outputs.bl_idname, text="Batch Bake")
-			op_settings.bake_image_autosave = context.scene.bakenode_bake_settings.bake_image_autosave
-			
-			layout.separator()
+			op_settings.bake_image_autosave = bakenode_scene_settings.bake_image_autosave
 			
 			layout.label(text="Output Settings")
 			# Change active bakenode output image
@@ -1120,41 +1170,36 @@ class BH_PT_bakenode_settings(Panel):
 			
 			if not active_bakenode_output_settings.output_image:
 				# Create new image for active bakenode output
-				row.operator(BH_OT_create_bakenode_output_image_name_dialog.bl_idname, icon="ADD", text="")
+				op_settings = row.operator(BH_OT_create_bakenode_output_image_name_dialog.bl_idname, icon="ADD", text="")
+				op_settings.bakenode_output_index = bakenode_active_output_index
 			else:
 				# Show active bakenode output picture in image editor
-				row.operator(BH_OT_show_bakenode_output_image_name_in_editor.bl_idname, icon="WORKSPACE", text="").bakenode_output_index = bakenode_active_output_index
+				op_settings = row.operator(BH_OT_show_bakenode_output_image_name_in_editor.bl_idname, icon="WORKSPACE", text="")
+				op_settings.bakenode_output_index = bakenode_active_output_index
 			# Active bakenode output settings
 			row = layout.row()
 			row.prop(active_bakenode_output_settings, "samples")
 			row.prop(active_bakenode_output_settings, "padding_per_128")
 
-			layout.separator()
 			# Batch operators
 			layout.operator(BH_OT_batch_create_bakenode_output_image_name_dialog.bl_idname, text="Batch Create Output Images")
 			layout.operator(BH_OT_batch_set_bakenode_output_image_name_fake_user_dialog.bl_idname, text="Batch Set Output Image Fake Users")
-
-			layout.separator()
 			
-
-			
-			layout.prop(context.scene.bakenode_bake_settings, "bake_image_autosave")
-			
-			layout.separator()
+			layout.prop(bakenode_scene_settings, "bake_image_autosave")
 			
 			layout.label(text="Batch Path Change")
 			base_path, file_name = create_image_file_path(
-				context.scene.bakenode_ui_settings.batch_image_base_path,
+				bakenode_scene_settings.batch_image_base_path,
 				"NAME"
 			)
 			layout.label(text=base_path+file_name)
 			
-			layout.prop(context.scene.bakenode_ui_settings, "batch_image_base_path", text="Base Path")
-			layout.prop(context.scene.bakenode_ui_settings, "batch_image_save", text="Batch Save")
+			layout.prop(bakenode_scene_settings, "batch_image_base_path", text="Base Path")
+			layout.prop(bakenode_scene_settings, "batch_image_save", text="Batch Save")
 			
 			op_settings = layout.operator(BH_OT_batch_change_bakenode_filepaths.bl_idname)
-			op_settings.base_path = context.scene.bakenode_ui_settings.batch_image_base_path
-			op_settings.save = context.scene.bakenode_ui_settings.batch_image_save
+			op_settings.base_path = bakenode_scene_settings.batch_image_base_path
+			op_settings.save = bakenode_scene_settings.batch_image_save
 			
 		else:
 			prefs = get_addon_preferences()
@@ -1241,8 +1286,7 @@ def add_connect_bakenode_outputs_button(self, context):
 
 classes = (
 	BH_bakenode_output_settings,
-	BH_bakenode_bake_settings,
-	BH_bakenode_ui_settings,
+	BH_bakenode_scene_settings,
 	BH_OT_prepare_bake,
 	BH_OT_connect_bakenode_output_dialog,
 	BH_OT_bake_single_bakenode_output_dialog,
@@ -1261,16 +1305,15 @@ classes = (
 	BH_PT_bakenode_settings,
 	BH_PT_bakenode_settings_node_editor,
 	BH_OT_bake_material_results_dialog,
+	BH_OT_save_bakenode_output_image,
 	BH_addon_preferences
 )
 
 def register():
 	for cls in classes:
 		bpy.utils.register_class(cls)
-		
-	bpy.types.Scene.bakenode_output_active_index = IntProperty(name = "Active Bakenode Output Index", default = 0)
-	bpy.types.Scene.bakenode_bake_settings = PointerProperty(type=BH_bakenode_bake_settings)
-	bpy.types.Scene.bakenode_ui_settings = PointerProperty(type=BH_bakenode_ui_settings)
+	
+	bpy.types.Scene.bakenode_scene_settings = PointerProperty(type=BH_bakenode_scene_settings)
 	bpy.types.NodeSocketInterfaceStandard.bakenode_output_settings = PointerProperty(
 		type=BH_bakenode_output_settings
 	)
@@ -1281,9 +1324,7 @@ def unregister():
 	bpy.types.NODE_MT_context_menu.remove(add_connect_bakenode_outputs_button)
 	
 	del bpy.types.NodeSocketInterfaceStandard.bakenode_output_settings
-	del bpy.types.Scene.bakenode_output_active_index
-	del bpy.types.Scene.bakenode_ui_settings
-	del bpy.types.Scene.bakenode_bake_settings
+	del bpy.types.Scene.bakenode_scene_settings
 	
 	for cls in classes:
 		bpy.utils.unregister_class(cls)

@@ -211,8 +211,9 @@ def bake_bakenode_output(self, context, bakenode_output_index):
 		current_bakenode = get_bakenode(mat)
 		
 		# Get Bakenode Emission and Material Output
-		bakenode_emission = get_node("BakeNode_Emission", mat.node_tree.nodes, "ShaderNodeEmission")
 		material_output = get_node("Material Output", mat.node_tree.nodes, "ShaderNodeOutputMaterial")
+		bakenode_emission = get_node("BakeNode_Emission", mat.node_tree.nodes, "ShaderNodeEmission")
+		set_node_relative_location(material_output, bakenode_emission, horz_align="CENTER", vert_align="BOTTOM")
 		bakehelper_node = mat.node_tree.nodes.active
 		
 		# Connect Bakenode output to BakeNode_Emission
@@ -735,17 +736,7 @@ class BH_OT_create_bakenode_output_image_name_dialog(Operator):
 			)
 		image = get_image_advanced(self.image_name, width=self.width, height=self.height, color_type=self.color_type, alpha=self.alpha, float_buffer=self.float_buffer, use_fake_user=self.use_fake_user)
 		
-		#if self.file_path.startswith("//"):
-		#	self.file_path = "/".join( (os.path.dirname(os.path.realpath(bpy.data.filepath)), self.file_path[len("//"):]) )
-		
 		set_image_filepath(image, self.file_path, True)
-		
-		#if not self.file_path.endswith("/"):
-		#	self.file_path += "/"
-		
-		#image.filepath_raw = self.file_path + image.name + ".png"
-		#if self.file_path.startswith("//"):
-		#	image.filepath = image.filepath_raw
 		
 		if self.save_to_disk:
 			image.save()
